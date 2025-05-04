@@ -45,4 +45,4 @@ You are free to inspect the source code and compile the project in Visual Studio
 provide no warranties or any other promises of performance or fitness. 
 
 ## License
-Copyright (c) 2005 by the author, joncox123. All rights reserved.
+Copyright (c) 2025 by the author, joncox123. All rights reserved.
