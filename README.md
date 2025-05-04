@@ -1,5 +1,7 @@
 ## GhostBusterPlus
-A utility to improve the eInk experience on the Lenovo ThinkBook Plus Gen 4 laptop. 
+A utility to improve the eInk experience on the Lenovo ThinkBook Plus Gen 4 laptop.
+
+![logo](https://github.com/user-attachments/assets/def07e61-7fb3-45f7-be4b-e5d81a81018c)
 
 ## Features
 - Automatically activate the floating button in the EInkPlus app, to refresh the eInk display, under the following conditions:
