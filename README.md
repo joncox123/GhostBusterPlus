@@ -27,7 +27,7 @@ A utility to improve the eInk experience on the Lenovo ThinkBook Plus Gen 4 lapt
  ## To-do
  - Add a hot-key and menu option for toggling between an eInk friendly high contrast Windows theme and a dark theme
     - Works in AutoHotKey v2, but I need to figure out how to get this to work properly with C#
- - Figure out how to activate he floating refresh button without quickly moving the cursor, clicking the button and moving it back. I investigated this a bit, without success, but it seems like it should be possible with UI Automation features in C#.
+ - Figure out how to activate he floating refresh button without quickly moving the cursor, clicking the button and moving it back. I investigated this a bit, without success, but it seems like it should be possible with UI Automation features in C#. Since the "button" is actually a clickable region in a transparent window that covers the foreground of your entire screen, its a non-trivial process.
 
 ## System Requirements
 - Lenovo ThinkPad Plus Gen 4
