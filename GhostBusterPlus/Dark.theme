@@ -1,0 +1,69 @@
+; Copyright © Microsoft Corp.
+
+[Theme]
+; Windows - IDS_THEME_DISPLAYNAME_AERO_LIGHT
+DisplayName=Dark
+ThemeId={B765258F-6761-478D-82C8-DBF5F6A00483}
+
+; Computer - SHIDI_SERVER
+[CLSID\{20D04FE0-3AEA-1069-A2D8-08002B30309D}\DefaultIcon]
+DefaultValue=%SystemRoot%\System32\imageres.dll,-109
+
+; UsersFiles - SHIDI_USERFILES
+[CLSID\{59031A47-3F72-44A7-89C5-5595FE6B30EE}\DefaultIcon]
+DefaultValue=%SystemRoot%\System32\imageres.dll,-123
+
+; Network - SHIDI_MYNETWORK
+[CLSID\{F02C1A0D-BE21-4350-88B0-7367FC96EF3C}\DefaultIcon]
+DefaultValue=%SystemRoot%\System32\imageres.dll,-25
+
+; Recycle Bin - SHIDI_RECYCLERFULL SHIDI_RECYCLER
+[CLSID\{645FF040-5081-101B-9F08-00AA002F954E}\DefaultIcon]
+Full=%SystemRoot%\System32\imageres.dll,-54
+Empty=%SystemRoot%\System32\imageres.dll,-55
+
+[Control Panel\Cursors]
+AppStarting=%SystemRoot%\cursors\wait_rm.cur
+Arrow=%SystemRoot%\cursors\arrow_rm.cur
+Crosshair=%SystemRoot%\cursors\cross_rm.cur
+Hand=
+Help=%SystemRoot%\cursors\help_rm.cur
+IBeam=%SystemRoot%\cursors\beam_rm.cur
+No=%SystemRoot%\cursors\no_rm.cur
+NWPen=%SystemRoot%\cursors\pen_rm.cur
+SizeAll=%SystemRoot%\cursors\move_rm.cur
+SizeNESW=%SystemRoot%\cursors\size1_rm.cur
+SizeNS=%SystemRoot%\cursors\size4_rm.cur
+SizeNWSE=%SystemRoot%\cursors\size2_rm.cur
+SizeWE=%SystemRoot%\cursors\size3_rm.cur
+UpArrow=%SystemRoot%\cursors\up_rm.cur
+Wait=%SystemRoot%\cursors\busy_rm.cur
+DefaultValue=Windows Black (large)
+
+[Control Panel\Desktop]
+Wallpaper=
+Pattern=
+MultimonBackgrounds=0
+PicturePosition=4
+WindowsSpotlight=0
+
+[VisualStyles]
+Path=%SystemRoot%\resources\themes\Aero\Aero.msstyles
+ColorStyle=NormalColor
+Size=NormalSize
+AutoColorization=0
+ColorizationColor=0XC44A5459
+SystemMode=Dark
+AppMode=Dark
+VisualStyleVersion=10
+
+[boot]
+SCRNSAVE.EXE=
+
+[MasterThemeSelector]
+MTSM=RJSPBS
+
+[Sounds]
+; IDS_SCHEME_DEFAULT
+SchemeName=@mmres.dll,-800
+

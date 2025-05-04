@@ -1,0 +1,102 @@
+; Copyright © Microsoft Corp.
+
+[Theme]
+; High Contrast White - IDS_THEME_DISPLAYNAME_HCWHITE
+DisplayName=eInk
+ThemeId={152A1F48-485D-45CF-A19C-DE0B58AE3931}
+
+; Computer - SHIDI_SERVER
+[CLSID\{20D04FE0-3AEA-1069-A2D8-08002B30309D}\DefaultIcon]
+DefaultValue=%SystemRoot%\System32\imageres.dll,-109
+
+; UsersFiles - SHIDI_USERFILES
+[CLSID\{59031A47-3F72-44A7-89C5-5595FE6B30EE}\DefaultIcon]
+DefaultValue=%SystemRoot%\System32\imageres.dll,-123
+
+; Network - SHIDI_MYNETWORK
+[CLSID\{F02C1A0D-BE21-4350-88B0-7367FC96EF3C}\DefaultIcon]
+DefaultValue=%SystemRoot%\System32\imageres.dll,-25
+
+; Recycle Bin - SHIDI_RECYCLERFULL SHIDI_RECYCLER
+[CLSID\{645FF040-5081-101B-9F08-00AA002F954E}\DefaultIcon]
+Full=%SystemRoot%\System32\imageres.dll,-54
+Empty=%SystemRoot%\System32\imageres.dll,-55
+
+[Control Panel\Colors]
+ActiveTitle=117 117 117
+Background=255 255 255
+ButtonFace=255 255 255
+ButtonText=0 0 0
+GrayText=133 133 133
+Hilight=0 0 0
+HilightText=255 255 255
+HotTrackingColor=0 9 255
+InactiveTitle=166 166 166
+InactiveTitleText=0 0 0
+TitleText=255 255 255
+Window=255 255 255
+WindowText=0 0 0
+Scrollbar=255 255 255
+Menu=255 255 255
+WindowFrame=0 0 0
+MenuText=0 0 0
+ActiveBorder=128 128 128
+InactiveBorder=192 192 192
+AppWorkspace=128 128 128
+ButtonShadow=128 128 128
+ButtonHilight=192 192 192
+ButtonDkShadow=0 0 0
+ButtonLight=192 192 192
+InfoText=0 0 0
+InfoWindow=255 255 255
+ButtonAlternateFace=192 192 192
+GradientActiveTitle=0 0 0
+GradientInactiveTitle=255 255 255
+MenuHilight=0 0 0
+MenuBar=255 255 255
+
+[Control Panel\Cursors]
+Arrow=%USERPROFILE%\AppData\Local\Microsoft\Windows\Cursors\arrow_eoa.cur
+Help=%USERPROFILE%\AppData\Local\Microsoft\Windows\Cursors\helpsel_eoa.cur
+AppStarting=%USERPROFILE%\AppData\Local\Microsoft\Windows\Cursors\busy_eoa.cur
+Wait=%USERPROFILE%\AppData\Local\Microsoft\Windows\Cursors\wait_eoa.cur
+NWPen=%USERPROFILE%\AppData\Local\Microsoft\Windows\Cursors\pen_eoa.cur
+No=%USERPROFILE%\AppData\Local\Microsoft\Windows\Cursors\unavail_eoa.cur
+SizeNS=%USERPROFILE%\AppData\Local\Microsoft\Windows\Cursors\ns_eoa.cur
+SizeWE=%USERPROFILE%\AppData\Local\Microsoft\Windows\Cursors\ew_eoa.cur
+Crosshair=%USERPROFILE%\AppData\Local\Microsoft\Windows\Cursors\cross_eoa.cur
+IBeam=%USERPROFILE%\AppData\Local\Microsoft\Windows\Cursors\ibeam_eoa.cur
+SizeNWSE=%USERPROFILE%\AppData\Local\Microsoft\Windows\Cursors\nwse_eoa.cur
+SizeNESW=%USERPROFILE%\AppData\Local\Microsoft\Windows\Cursors\nesw_eoa.cur
+SizeAll=%USERPROFILE%\AppData\Local\Microsoft\Windows\Cursors\move_eoa.cur
+UpArrow=%USERPROFILE%\AppData\Local\Microsoft\Windows\Cursors\up_eoa.cur
+DefaultValue=Windows Black
+Hand=%USERPROFILE%\AppData\Local\Microsoft\Windows\Cursors\link_eoa.cur
+Link=
+
+[Control Panel\Desktop]
+Wallpaper=
+Pattern=
+MultimonBackgrounds=0
+PicturePosition=4
+
+[VisualStyles]
+Path=%SystemRoot%\resources\themes\Aero\AeroLite.msstyles
+ColorStyle=NormalColor
+Size=NormalSize
+HighContrast=4
+VisualStyleVersion=10
+ColorizationColor=0X82828200
+AutoColorization=0
+AppMode=Light
+SystemMode=Dark
+
+[boot]
+SCRNSAVE.EXE=
+
+[MasterThemeSelector]
+MTSM=RJSPBS
+
+[Sounds]
+; IDS_SCHEME_DEFAULT
+SchemeName=@mmres.dll,-800
