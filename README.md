@@ -18,6 +18,12 @@ A utility to improve the eInk experience on the Lenovo ThinkBook Plus Gen 4 lapt
  Double click on GhostBusterPlus.exe. The app should launch a taskbar tray icon, which might be hidden in the overflow area unless you drag it onto the main taskbar.
  The icon looks like the Ghostbusters logo. You can right click (two finger click) on the icon to pull up a menu listing the options, configurations and hotkeys, or to quit.
 
+ ### Run automatically at startup
+ To have Windows launch GhostBusterPlus automatically when you log in, do the following:
+ - Open the folder where you extracted the GhostBusterPlus zip.
+ - Press Win+R to bring up the Run dialog box. Enter "shell:startup" and hit OK.
+ - Drag GhostBusterPlus.exe into the Startup folder while holding down the Alt key to create a shortcut.
+
  ## To-do
  - Add a hot-key and menu option for toggling between an eInk friendly high contrast Windows theme and a dark theme
     - Works in AutoHotKey v2, but I need to figure out how to get this to work properly with C#
