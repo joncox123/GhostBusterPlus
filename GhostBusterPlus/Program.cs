@@ -479,7 +479,7 @@ namespace ScreenRefreshApp
             keybd_event((byte)refreshKey, 0, 0, 0);
             System.Threading.Thread.Sleep(10);
             keybd_event((byte)refreshKey, 0, KEYEVENTF_KEYUP, 0);
-            Beep(1000, 100);
+            // Beep(1000, 100);
         }
 
         /// <summary>
