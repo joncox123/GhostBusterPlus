@@ -88,6 +88,7 @@ namespace ScreenRefreshApp
         private readonly System.Threading.CancellationTokenSource cancellationTokenSource = new System.Threading.CancellationTokenSource();
         private readonly Processor screenshotProcessor; // DirectX processor
         private double refreshThresholdPct = 3.0; // Default to 3%
+        private bool firstRunMessageShown = false; // Flag to track if first run message has been shown
 
         // P/Invoke for simulating keyboard events
         [System.Runtime.InteropServices.DllImport("user32.dll")]
@@ -112,6 +113,13 @@ namespace ScreenRefreshApp
             screenshotProcessor = new Processor();
             InitializeTrayIcon();
             LoadSettings();
+            
+            // Show the first run message if it hasn't been shown before
+            if (!firstRunMessageShown)
+            {
+                ShowFirstRunMessage();
+            }
+            
             UpdateTrayMenu();
             InitializeTimers();
             InitializeInputHooks();
@@ -124,6 +132,27 @@ namespace ScreenRefreshApp
                 SaveSettings();
                 screenshotTimer.Enabled = screenshotsEnabled;
             });
+        }
+
+        /// <summary>
+        /// Displays a welcome message with setup instructions and privacy information on first run.
+        /// </summary>
+        private void ShowFirstRunMessage()
+        {
+            System.Windows.Forms.MessageBox.Show(
+                "GhostBusterPlus works by monitoring pixel changes on your screen, and automatically pressing a function key " +
+                "(e.g. F6, etc.) if the screen changes exceed a percentage threshold. To work, you must be using the latest " +
+                "version of Lenovo EInkPlus and enable the screen refresh shortcut key in the EInkPlus settings to set the key to F6.\n\n" +
+                "A note regarding privacy and security: This app does not have network connectivity, elevated privileges or recording " +
+                "features. In fact, the screen shot is never transferred into the program, but rather, all display processing is done " +
+                "in DirectX on the GPU, and only the percentage pixel change is returned to the program.",
+                "Welcome to GhostBusterPlus",
+                System.Windows.Forms.MessageBoxButtons.OK,
+                System.Windows.Forms.MessageBoxIcon.Information);
+            
+            // Mark the message as shown and save this setting
+            firstRunMessageShown = true;
+            SaveSettings();
         }
 
         /// <summary>
@@ -310,6 +339,9 @@ namespace ScreenRefreshApp
             screenshotPeriodMs = 2000;
             userInputDelayMs = 4000; // Default to 2000 ms
             refreshKey = System.Windows.Forms.Keys.F6;
+            refreshThresholdPct = 3.0;
+            firstRunMessageShown = false; // Default is false (show message)
+            
             if (System.IO.File.Exists(iniPath))
             {
                 var lines = System.IO.File.ReadAllLines(iniPath);
@@ -324,10 +356,15 @@ namespace ScreenRefreshApp
                             case "ScreenshotPeriodMs": screenshotPeriodMs = int.Parse(parts[1].Trim()); break;
                             case "UserInputDelayMs": userInputDelayMs = int.Parse(parts[1].Trim()); break;
                             case "RefreshKey": refreshKey = (System.Windows.Forms.Keys)System.Enum.Parse(typeof(System.Windows.Forms.Keys), parts[1].Trim()); break;
+                            case "RefreshThresholdPct": refreshThresholdPct = double.Parse(parts[1].Trim()); break;
+                            case "FirstRunMessageShown": firstRunMessageShown = bool.Parse(parts[1].Trim()); break;
                         }
                     }
                 }
             }
+            
+            // Apply the threshold setting to the processor
+            screenshotProcessor.PixelThresholdPct = refreshThresholdPct;
         }
 
         /// <summary>
@@ -340,7 +377,9 @@ namespace ScreenRefreshApp
                 $"ScreenshotsEnabled={screenshotsEnabled}",
                 $"ScreenshotPeriodMs={screenshotPeriodMs}",
                 $"UserInputDelayMs={userInputDelayMs}",
-                $"RefreshKey={refreshKey}"
+                $"RefreshKey={refreshKey}",
+                $"RefreshThresholdPct={refreshThresholdPct}",
+                $"FirstRunMessageShown={firstRunMessageShown}"
             };
             System.IO.File.WriteAllLines(iniPath, settings);
         }
