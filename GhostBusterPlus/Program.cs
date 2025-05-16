@@ -87,6 +87,7 @@ namespace ScreenRefreshApp
         private const double MOUSE_CHECK_TIMER_SEC = 0.2; // Mouse check interval (seconds)
         private readonly System.Threading.CancellationTokenSource cancellationTokenSource = new System.Threading.CancellationTokenSource();
         private readonly Processor screenshotProcessor; // DirectX processor
+        private double refreshThresholdPct = 3.0; // Default to 3%
 
         // P/Invoke for simulating keyboard events
         [System.Runtime.InteropServices.DllImport("user32.dll")]
@@ -134,7 +135,7 @@ namespace ScreenRefreshApp
 
             // Screenshot period sub-menu
             System.Windows.Forms.ToolStripMenuItem screenshotPeriodMenu = new System.Windows.Forms.ToolStripMenuItem("Screenshot Period");
-            int[] periods = { 250, 500, 1000, 2000 };
+            int[] periods = { 250, 500, 1000, 2000, 4000 };
             foreach (int period in periods)
             {
                 System.Windows.Forms.ToolStripMenuItem item = new System.Windows.Forms.ToolStripMenuItem($"{period} ms");
@@ -177,7 +178,7 @@ namespace ScreenRefreshApp
 
             // User input delay sub-menu
             System.Windows.Forms.ToolStripMenuItem inputDelayMenu = new System.Windows.Forms.ToolStripMenuItem("User Input Delay");
-            int[] delays = { 250, 500, 1000, 2000, 4000 };
+            int[] delays = { 250, 500, 1000, 2000, 4000, 8000 };
             foreach (int delay in delays)
             {
                 System.Windows.Forms.ToolStripMenuItem item = new System.Windows.Forms.ToolStripMenuItem($"{delay} ms");
@@ -190,6 +191,23 @@ namespace ScreenRefreshApp
                     SaveSettings();
                 };
                 inputDelayMenu.DropDownItems.Add(item);
+            }
+
+            // Refresh threshold sub-menu
+            System.Windows.Forms.ToolStripMenuItem thresholdMenu = new System.Windows.Forms.ToolStripMenuItem("Refresh Threshold");
+            double[] thresholds = { 1.0, 2.0, 3.0, 5.0, 10.0, 15.0, 20.0 };
+            foreach (double threshold in thresholds)
+            {
+                System.Windows.Forms.ToolStripMenuItem item = new System.Windows.Forms.ToolStripMenuItem($"{threshold}%");
+                item.Checked = threshold == refreshThresholdPct;
+                item.Click += (s, e) =>
+                {
+                    refreshThresholdPct = threshold;
+                    screenshotProcessor.PixelThresholdPct = threshold;
+                    UpdateTrayMenu();
+                    SaveSettings();
+                };
+                thresholdMenu.DropDownItems.Add(item);
             }
 
             // About menu item
@@ -213,7 +231,16 @@ namespace ScreenRefreshApp
                 System.Environment.Exit(0);
             };
 
-            trayMenu.Items.AddRange(new System.Windows.Forms.ToolStripItem[] { screenshotPeriodMenu, enableScreenshotsMenu, refreshKeyMenu, inputDelayMenu, aboutMenu, exitMenu });
+            trayMenu.Items.AddRange(new System.Windows.Forms.ToolStripItem[] 
+            { 
+                screenshotPeriodMenu, 
+                enableScreenshotsMenu, 
+                refreshKeyMenu, 
+                inputDelayMenu, 
+                thresholdMenu, 
+                aboutMenu, 
+                exitMenu 
+            });
 
             trayIcon = new System.Windows.Forms.NotifyIcon
             {
@@ -262,6 +289,15 @@ namespace ScreenRefreshApp
                         subItem.Font = new System.Drawing.Font(subItem.Font ?? System.Drawing.SystemFonts.MenuFont, isSelected ? System.Drawing.FontStyle.Bold : System.Drawing.FontStyle.Regular);
                     }
                 }
+                else if (item.Text == "Refresh Threshold")
+                {
+                    foreach (System.Windows.Forms.ToolStripMenuItem subItem in item.DropDownItems)
+                    {
+                        bool isSelected = subItem.Text == $"{refreshThresholdPct}%";
+                        subItem.Checked = isSelected;
+                        subItem.Font = new System.Drawing.Font(subItem.Font ?? System.Drawing.SystemFonts.MenuFont, isSelected ? System.Drawing.FontStyle.Bold : System.Drawing.FontStyle.Regular);
+                    }
+                }
             }
         }
 
@@ -271,9 +307,9 @@ namespace ScreenRefreshApp
         private void LoadSettings()
         {
             screenshotsEnabled = true;
-            screenshotPeriodMs = 1000;
-            userInputDelayMs = 1000; // Default to 1000 ms
-            refreshKey = System.Windows.Forms.Keys.F5;
+            screenshotPeriodMs = 2000;
+            userInputDelayMs = 4000; // Default to 2000 ms
+            refreshKey = System.Windows.Forms.Keys.F6;
             if (System.IO.File.Exists(iniPath))
             {
                 var lines = System.IO.File.ReadAllLines(iniPath);
@@ -425,7 +461,6 @@ namespace ScreenRefreshApp
         /// </summary>
         private void CheckForRefresh()
         {
-            System.Console.WriteLine("CheckForRefresh ran at " + System.DateTime.Now.ToString("HH:mm:ss.fff"));
             long currentTime = System.Environment.TickCount;
             if (doRefresh &&
                 (currentTime - lastMouseInputTime >= userInputDelayMs) &&
@@ -441,7 +476,6 @@ namespace ScreenRefreshApp
         /// </summary>
         private void RefreshScreen()
         {
-            System.Console.WriteLine("RefreshScreen ran at " + System.DateTime.Now.ToString("HH:mm:ss.fff"));
             keybd_event((byte)refreshKey, 0, 0, 0);
             System.Threading.Thread.Sleep(10);
             keybd_event((byte)refreshKey, 0, KEYEVENTF_KEYUP, 0);
