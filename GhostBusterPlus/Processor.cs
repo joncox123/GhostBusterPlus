@@ -293,7 +293,7 @@ namespace ScreenRefreshApp
         /// <returns>True if significant screen change is detected, otherwise false.</returns>
         public bool ProcessScreenshotOnGPU()
         {
-            System.Console.WriteLine($"Screenshot taken at {System.DateTime.Now:HH:mm:ss.fff}");
+            //System.Console.WriteLine($"Screenshot taken at {System.DateTime.Now:HH:mm:ss.fff}");
             SharpDX.DXGI.Resource desktopResource = null;
             SharpDX.DXGI.OutputDuplicateFrameInformation frameInfo;
             bool frameAcquired = false;
@@ -351,7 +351,7 @@ namespace ScreenRefreshApp
                         int diffCount = CompareScreenshotsGPU();
                         int totalPixels = currentGrayscaleTexture.Description.Width * currentGrayscaleTexture.Description.Height;
                         double diffPercentage = (double)diffCount / totalPixels * 100.0;
-                        System.Console.WriteLine($"CompareScreenshotsGPU ran at {System.DateTime.Now:HH:mm:ss.fff}, DiffCount: {diffCount}, Total Pixels: {totalPixels}, Percentage: {diffPercentage:F2}%");
+                        //System.Console.WriteLine($"CompareScreenshotsGPU ran at {System.DateTime.Now:HH:mm:ss.fff}, DiffCount: {diffCount}, Total Pixels: {totalPixels}, Percentage: {diffPercentage:F2}%");
 
                         // Compare against the configurable threshold
                         significantChange = diffPercentage >= pixelThresholdPct;

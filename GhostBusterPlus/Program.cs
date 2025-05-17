@@ -61,6 +61,7 @@ using System.Runtime.InteropServices;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Diagnostics;
 
 namespace ScreenRefreshApp
 {
@@ -90,6 +91,9 @@ namespace ScreenRefreshApp
         private readonly Processor screenshotProcessor; // DirectX processor
         private double refreshThresholdPct = 3.0; // Default to 3%
         private bool firstRunMessageShown = false; // Flag to track if first run message has been shown
+        private string userThemesPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Themes");
+        private string eInkThemePath;
+        private string darkThemePath;
         
         // P/Invoke for simulating keyboard events
         [System.Runtime.InteropServices.DllImport("user32.dll")]
@@ -116,9 +120,10 @@ namespace ScreenRefreshApp
             LoadSettings();
             lastScreenChangeTime = System.Environment.TickCount; // Initialize to now
             
-            // Show the first run message if it hasn't been shown before
+            // Copy theme files on first run
             if (!firstRunMessageShown)
             {
+                CopyThemeFiles();
                 ShowFirstRunMessage();
             }
             
@@ -131,6 +136,7 @@ namespace ScreenRefreshApp
 
             TakeInitialScreenshot();
 
+            // Add hotkeys for theme switching
             KeyboardHook.AddHotkey(System.Windows.Forms.Keys.D | System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.Shift, () =>
             {
                 screenshotsEnabled = !screenshotsEnabled;
@@ -138,12 +144,16 @@ namespace ScreenRefreshApp
                 SaveSettings();
                 screenshotTimer.Enabled = screenshotsEnabled;
             });
-
-            // Add the global mouse wheel message filter
-            Application.AddMessageFilter(new GlobalMouseWheelMessageFilter(() =>
+            
+            KeyboardHook.AddHotkey(System.Windows.Forms.Keys.S | System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.Shift, () =>
             {
-                lastButtonInputTime = Environment.TickCount;
-            }));
+                ApplyTheme(darkThemePath);
+            });
+            
+            KeyboardHook.AddHotkey(System.Windows.Forms.Keys.Z | System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.Shift, () =>
+            {
+                ApplyTheme(eInkThemePath);
+            });
         }
 
         /// <summary>
@@ -251,6 +261,19 @@ namespace ScreenRefreshApp
                 thresholdMenu.DropDownItems.Add(item);
             }
 
+            // Theme switching sub-menu
+            System.Windows.Forms.ToolStripMenuItem themeMenu = new System.Windows.Forms.ToolStripMenuItem("Switch Theme");
+
+            // Dark theme menu item
+            System.Windows.Forms.ToolStripMenuItem darkThemeMenuItem = new System.Windows.Forms.ToolStripMenuItem("Dark (Ctrl+Shift+S)");
+            darkThemeMenuItem.Click += (s, e) => ApplyTheme(darkThemePath);
+            themeMenu.DropDownItems.Add(darkThemeMenuItem);
+
+            // eInk theme menu item
+            System.Windows.Forms.ToolStripMenuItem eInkThemeMenuItem = new System.Windows.Forms.ToolStripMenuItem("eInk (Ctrl+Shift+Z)");
+            eInkThemeMenuItem.Click += (s, e) => ApplyTheme(eInkThemePath);
+            themeMenu.DropDownItems.Add(eInkThemeMenuItem);
+
             // About menu item
             System.Windows.Forms.ToolStripMenuItem aboutMenu = new System.Windows.Forms.ToolStripMenuItem("About GhostBusterPlus...");
             aboutMenu.Click += (s, e) =>
@@ -279,6 +302,7 @@ namespace ScreenRefreshApp
                 refreshKeyMenu, 
                 inputDelayMenu, 
                 thresholdMenu, 
+                themeMenu,
                 aboutMenu, 
                 exitMenu 
             });
@@ -535,6 +559,175 @@ namespace ScreenRefreshApp
             System.Threading.Thread.Sleep(10);
             keybd_event((byte)refreshKey, 0, KEYEVENTF_KEYUP, 0);
             Beep(1000, 200);
+        }
+
+        /// <summary>
+        /// Copies and prepares theme files for Windows 11 compatibility
+        /// </summary>
+        private void CopyThemeFiles()
+        {
+            try
+            {
+                // Create the themes directory if it doesn't exist
+                Directory.CreateDirectory(userThemesPath);
+
+                string appPath = Application.StartupPath;
+                string sourceEInkPath = Path.Combine(appPath, "eInk.theme");
+                string sourceDarkPath = Path.Combine(appPath, "Dark.theme");
+
+                // Use the EXACT names as the source files - this is critical
+                eInkThemePath = Path.Combine(userThemesPath, "eInk.theme");
+                darkThemePath = Path.Combine(userThemesPath, "Dark.theme");
+
+                if (File.Exists(sourceEInkPath))
+                {
+                    File.Copy(sourceEInkPath, eInkThemePath, true);
+
+                    // Set appropriate file attributes
+                    File.SetAttributes(eInkThemePath, FileAttributes.Normal);
+                    System.Console.WriteLine($"Copied {sourceEInkPath} to {eInkThemePath}");
+                }
+                else
+                {
+                    System.Console.WriteLine($"Source file not found: {sourceEInkPath}");
+                }
+
+                if (File.Exists(sourceDarkPath))
+                {
+                    File.Copy(sourceDarkPath, darkThemePath, true);
+
+                    // Set appropriate file attributes
+                    File.SetAttributes(darkThemePath, FileAttributes.Normal);
+                    System.Console.WriteLine($"Copied {sourceDarkPath} to {darkThemePath}");
+                }
+                else
+                {
+                    System.Console.WriteLine($"Source file not found: {sourceDarkPath}");
+                }
+
+                System.Console.WriteLine($"Theme files copied to {userThemesPath}");
+            }
+            catch (Exception ex)
+            {
+                System.Console.WriteLine($"Failed to copy theme files: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Applies Windows theme using a method identical to AutoHotkey V2's implementation
+        /// </summary>
+        /// <param name="themePath">Full path to the theme file</param>
+        private void ApplyTheme(string themePath)
+        {
+            if (string.IsNullOrEmpty(themePath) || !File.Exists(themePath))
+            {
+                System.Console.WriteLine($"Theme file not found: {themePath}");
+                return;
+            }
+
+            try
+            {
+                // The proper Windows 11 way to apply themes - this is what AutoHotkey V2 does:
+                // 1. ShellExecute the .theme file directly with the "open" verb
+                // 2. Use proper parameters to ensure application happens synchronously
+
+                ProcessStartInfo startInfo = new ProcessStartInfo
+                {
+                    FileName = themePath,
+                    UseShellExecute = true,
+                    Verb = "open"  // Critical - tells Windows to use the default handler
+                };
+
+                using (Process process = Process.Start(startInfo))
+                {
+                    // Wait a moment to ensure system has time to process
+                    Thread.Sleep(500);
+                }
+
+                // Also register the theme in the registry for persistence
+                try
+                {
+                    Microsoft.Win32.Registry.SetValue(
+                        @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes",
+                        "CurrentTheme",
+                        themePath,
+                        Microsoft.Win32.RegistryValueKind.String);
+
+                    // Force Windows to reload personalization settings
+                    using (Process refreshProcess = new Process())
+                    {
+                        refreshProcess.StartInfo.FileName = "taskkill";
+                        refreshProcess.StartInfo.Arguments = "/f /im systemsettings.exe";
+                        refreshProcess.StartInfo.CreateNoWindow = true;
+                        refreshProcess.StartInfo.UseShellExecute = false;
+                        refreshProcess.Start();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Console.WriteLine($"Registry update failed: {ex.Message}");
+                }
+
+                // Show success notification
+                trayIcon.ShowBalloonTip(
+                    2000,
+                    "Theme Applied",
+                    $"Switched to {Path.GetFileNameWithoutExtension(themePath)} theme.",
+                    ToolTipIcon.Info);
+
+                System.Console.WriteLine($"Applied theme: {Path.GetFileName(themePath)}");
+            }
+            catch (Exception ex)
+            {
+                System.Console.WriteLine($"Theme application failed: {ex.Message}");
+
+                // Fallback to the older methods
+                try
+                {
+                    ProcessStartInfo deskCplInfo = new ProcessStartInfo
+                    {
+                        FileName = "rundll32.exe",
+                        Arguments = $"shell32.dll,Control_RunDLL desk.cpl,,5 \"{themePath}\"",
+                        UseShellExecute = true
+                    };
+                    Process.Start(deskCplInfo);
+                }
+                catch (Exception fallbackEx)
+                {
+                    System.Console.WriteLine($"Fallback method failed: {fallbackEx.Message}");
+                }
+            }
+        }
+
+        // P/Invoke declarations for broadcasting theme change message
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern IntPtr SendMessageTimeout(
+            IntPtr hWnd,
+            uint Msg,
+            UIntPtr wParam,
+            IntPtr lParam,
+            uint fuFlags,
+            uint uTimeout,
+            out UIntPtr lpdwResult);
+
+        private const int HWND_BROADCAST = 0xFFFF;
+        private const uint WM_SETTINGCHANGE = 0x001A;
+        private const uint SMTO_ABORTIFHUNG = 0x0002;
+
+        /// <summary>
+        /// Broadcasts a message to notify all windows about the theme change
+        /// </summary>
+        private void PostThemeChangedMessage()
+        {
+            UIntPtr result;
+            SendMessageTimeout(
+                (IntPtr)HWND_BROADCAST,
+                WM_SETTINGCHANGE,
+                UIntPtr.Zero,
+                Marshal.StringToHGlobalUni("ImmersiveColorSet"),
+                SMTO_ABORTIFHUNG,
+                1000,
+                out result);
         }
 
         /// <summary>
