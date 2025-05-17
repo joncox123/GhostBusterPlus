@@ -141,8 +141,8 @@ namespace ScreenRefreshApp
         {
             System.Windows.Forms.MessageBox.Show(
                 "GhostBusterPlus works by monitoring pixel changes on your screen, and automatically pressing a function key " +
-                "(e.g. F6, etc.) if the screen changes exceed a percentage threshold. To work, you must be using the latest " +
-                "version of Lenovo EInkPlus and enable the screen refresh shortcut key in the EInkPlus settings to set the key to F6.\n\n" +
+                "(e.g. F4, etc.) if the screen changes exceed a percentage threshold. To work, you must be using the latest " +
+                "version of Lenovo EInkPlus and enable the clear ghosts shortcut key in the EInkPlus settings to set the key to F4.\n\n" +
                 "A note regarding privacy and security: This app does not have network connectivity, elevated privileges or recording " +
                 "features. In fact, the screen shot is never transferred into the program, but rather, all display processing is done " +
                 "in DirectX on the GPU, and only the percentage pixel change is returned to the program.",
@@ -191,7 +191,7 @@ namespace ScreenRefreshApp
 
             // Refresh key sub-menu
             System.Windows.Forms.ToolStripMenuItem refreshKeyMenu = new System.Windows.Forms.ToolStripMenuItem("Refresh Key");
-            System.Windows.Forms.Keys[] keys = { System.Windows.Forms.Keys.F3, System.Windows.Forms.Keys.F4, System.Windows.Forms.Keys.F5, System.Windows.Forms.Keys.F6 };
+            System.Windows.Forms.Keys[] keys = { System.Windows.Forms.Keys.F4, System.Windows.Forms.Keys.F5, System.Windows.Forms.Keys.F8, System.Windows.Forms.Keys.F9 };
             foreach (System.Windows.Forms.Keys key in keys)
             {
                 System.Windows.Forms.ToolStripMenuItem item = new System.Windows.Forms.ToolStripMenuItem(key.ToString());
@@ -338,7 +338,7 @@ namespace ScreenRefreshApp
             screenshotsEnabled = true;
             screenshotPeriodMs = 2000;
             userInputDelayMs = 4000; // Default to 2000 ms
-            refreshKey = System.Windows.Forms.Keys.F6;
+            refreshKey = System.Windows.Forms.Keys.F4;
             refreshThresholdPct = 3.0;
             firstRunMessageShown = false; // Default is false (show message)
             
@@ -518,7 +518,7 @@ namespace ScreenRefreshApp
             keybd_event((byte)refreshKey, 0, 0, 0);
             System.Threading.Thread.Sleep(10);
             keybd_event((byte)refreshKey, 0, KEYEVENTF_KEYUP, 0);
-            // Beep(1000, 100);
+            Beep(1000, 200);
         }
 
         /// <summary>
