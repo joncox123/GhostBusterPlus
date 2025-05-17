@@ -62,6 +62,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Diagnostics;
+using System.Text;
 
 namespace ScreenRefreshApp
 {
@@ -649,7 +650,7 @@ namespace ScreenRefreshApp
         }
 
         /// <summary>
-        /// Applies Windows theme using a robust method that works reliably on Windows 11
+        /// Applies Windows theme and closes any opened settings windows
         /// </summary>
         /// <param name="themePath">Full path to the theme file</param>
         private void ApplyTheme(string themePath)
@@ -662,80 +663,87 @@ namespace ScreenRefreshApp
 
             try
             {
-                System.Console.WriteLine($"Attempting to apply theme: {themePath}");
+                System.Console.WriteLine($"Applying theme: {themePath}");
+                Process settingsProcess = null;
+                Process themeProcess = null;
 
-                // Method 1: Use the most direct approach first - ShellExecute with "open" verb
-                try
+                // Method 1: Direct theme file execution (most effective)
+                themeProcess = Process.Start(new ProcessStartInfo
                 {
-                    Process themeProcess = new Process();
-                    themeProcess.StartInfo = new ProcessStartInfo
-                    {
-                        FileName = themePath,
-                        UseShellExecute = true,
-                        Verb = "open"
-                    };
-                    
-                    themeProcess.Start();
-                    
-                    // Give Windows more time to process
-                    Thread.Sleep(1000);
-                }
-                catch (Exception ex)
-                {
-                    System.Console.WriteLine($"Direct theme execution failed: {ex.Message}");
-                }
+                    FileName = themePath,
+                    UseShellExecute = true,
+                    Verb = "open"
+                });
+                
+                // Short wait to ensure the theme file is processed
+                Thread.Sleep(800);
+                
+                // Method 2: Set registry value (for persistence)
+                Microsoft.Win32.Registry.SetValue(
+                    @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes",
+                    "CurrentTheme", 
+                    themePath,
+                    Microsoft.Win32.RegistryValueKind.String);
 
-                // Method 2: Use the Control Panel method that's known to work
-                try
+                // Create a timer to find and close Settings windows after a delay
+                System.Windows.Forms.Timer cleanupTimer = new System.Windows.Forms.Timer();
+                cleanupTimer.Interval = 1500; // Wait 1.5 seconds
+                cleanupTimer.Tick += (s, e) =>
                 {
-                    Process.Start(new ProcessStartInfo
+                    try
                     {
-                        FileName = "control.exe",
-                        Arguments = $"desk.cpl,,5",
-                        UseShellExecute = true
-                    });
-                    
-                    // Wait for control panel to open
-                    Thread.Sleep(300);
-                    
-                    // Now directly open the theme file after control panel is open
-                    Process.Start(new ProcessStartInfo 
-                    {
-                        FileName = themePath,
-                        UseShellExecute = true
-                    });
-                    
-                    Thread.Sleep(500);
-                }
-                catch (Exception ex)
-                {
-                    System.Console.WriteLine($"Control Panel method failed: {ex.Message}");
-                }
-
-                // Registry approach as a backup
-                try
-                {
-                    Microsoft.Win32.Registry.SetValue(
-                        @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes",
-                        "CurrentTheme", 
-                        themePath,
-                        Microsoft.Win32.RegistryValueKind.String);
+                        // Close any Settings windows
+                        foreach (Process proc in Process.GetProcessesByName("SystemSettings"))
+                        {
+                            try { proc.CloseMainWindow(); } catch { }
+                            try { proc.Kill(); } catch { }
+                            System.Console.WriteLine("Closed Settings window");
+                        }
                         
-                    // Force a UI update
-                    PostThemeChangedMessage();
-                }
-                catch (Exception ex)
-                {
-                    System.Console.WriteLine($"Registry method failed: {ex.Message}");
-                }
+                        // Close any Control Panel windows - this requires finding explorer windows with specific titles
+                        foreach (Process proc in Process.GetProcessesByName("explorer"))
+                        {
+                            // Try to determine if it's a control panel window
+                            try
+                            {
+                                IntPtr hwnd = proc.MainWindowHandle;
+                                if (hwnd != IntPtr.Zero)
+                                {
+                                    const int nChars = 256;
+                                    StringBuilder windowTitle = new StringBuilder(nChars);
+                                    GetWindowText(hwnd, windowTitle, nChars);
+                                    
+                                    // If this is a control panel/personalization window
+                                    if (windowTitle.ToString().Contains("Personalization"))
+                                    {
+                                        PostMessage(hwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+                                        System.Console.WriteLine("Closed Personalization window");
+                                    }
+                                }
+                            }
+                            catch { }
+                        }
 
-                // Show notification to user
-                trayIcon.ShowBalloonTip(
-                    2000,
-                    "Theme Change",
-                    $"Switched to {Path.GetFileNameWithoutExtension(themePath)} theme",
-                    ToolTipIcon.Info);
-                    
+                        // Notification that theme was applied
+                        trayIcon.ShowBalloonTip(
+                            2000,
+                            "Theme Applied",
+                            $"Switched to {Path.GetFileNameWithoutExtension(themePath)} theme",
+                            ToolTipIcon.Info);
+
+                        // Dispose the timer
+                        cleanupTimer.Stop();
+                        cleanupTimer.Dispose();
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Console.WriteLine($"Cleanup failed: {ex.Message}");
+                    }
+                };
+                
+                // Start the cleanup timer
+                cleanupTimer.Start();
+                
                 System.Console.WriteLine($"Applied theme: {Path.GetFileName(themePath)}");
             }
             catch (Exception ex)
@@ -744,36 +752,15 @@ namespace ScreenRefreshApp
             }
         }
 
-        // P/Invoke declarations for broadcasting theme change message
-        [DllImport("user32.dll", CharSet = CharSet.Auto)]
-        private static extern IntPtr SendMessageTimeout(
-            IntPtr hWnd,
-            uint Msg,
-            UIntPtr wParam,
-            IntPtr lParam,
-            uint fuFlags,
-            uint uTimeout,
-            out UIntPtr lpdwResult);
+        // P/Invoke declarations for window handling
+        [DllImport("user32.dll")]
+        private static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 
-        private const int HWND_BROADCAST = 0xFFFF;
-        private const uint WM_SETTINGCHANGE = 0x001A;
-        private const uint SMTO_ABORTIFHUNG = 0x0002;
+        [DllImport("user32.dll")]
+        private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
 
-        /// <summary>
-        /// Broadcasts a message to notify all windows about the theme change
-        /// </summary>
-        private void PostThemeChangedMessage()
-        {
-            UIntPtr result;
-            SendMessageTimeout(
-                (IntPtr)HWND_BROADCAST,
-                WM_SETTINGCHANGE,
-                UIntPtr.Zero,
-                Marshal.StringToHGlobalUni("ImmersiveColorSet"),
-                SMTO_ABORTIFHUNG,
-                1000,
-                out result);
-        }
+        // Windows message constants
+        private const uint WM_CLOSE = 0x0010;
 
         /// <summary>
         /// Cleans up resources.
