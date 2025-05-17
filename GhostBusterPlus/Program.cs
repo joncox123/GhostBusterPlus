@@ -78,6 +78,7 @@ namespace ScreenRefreshApp
         private System.Drawing.Point lastMousePosition; // Last recorded mouse cursor position
         private long lastMouseInputTime; // Timestamp (ms) of last mouse movement
         private long lastButtonInputTime; // Timestamp (ms) of last keyboard/mouse button input
+        private long lastScreenChangeTime; // Timestamp (ms) of last significant screen change
         private bool doRefresh; // Flag indicating if a screen refresh is needed
         private bool screenshotsEnabled; // Whether screenshot capture is enabled
         private int screenshotPeriodMs; // Screenshot capture interval (ms)
@@ -89,7 +90,7 @@ namespace ScreenRefreshApp
         private readonly Processor screenshotProcessor; // DirectX processor
         private double refreshThresholdPct = 3.0; // Default to 3%
         private bool firstRunMessageShown = false; // Flag to track if first run message has been shown
-
+        
         // P/Invoke for simulating keyboard events
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
@@ -113,6 +114,7 @@ namespace ScreenRefreshApp
             screenshotProcessor = new Processor();
             InitializeTrayIcon();
             LoadSettings();
+            lastScreenChangeTime = System.Environment.TickCount; // Initialize to now
             
             // Show the first run message if it hasn't been shown before
             if (!firstRunMessageShown)
@@ -123,6 +125,10 @@ namespace ScreenRefreshApp
             UpdateTrayMenu();
             InitializeTimers();
             InitializeInputHooks();
+
+            // Add a message filter to catch mouse wheel events at the application level
+            Application.AddMessageFilter(new GlobalMouseWheelMessageFilter(() => lastButtonInputTime = Environment.TickCount));
+
             TakeInitialScreenshot();
 
             KeyboardHook.AddHotkey(System.Windows.Forms.Keys.D | System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.Shift, () =>
@@ -132,6 +138,12 @@ namespace ScreenRefreshApp
                 SaveSettings();
                 screenshotTimer.Enabled = screenshotsEnabled;
             });
+
+            // Add the global mouse wheel message filter
+            Application.AddMessageFilter(new GlobalMouseWheelMessageFilter(() =>
+            {
+                lastButtonInputTime = Environment.TickCount;
+            }));
         }
 
         /// <summary>
@@ -336,8 +348,8 @@ namespace ScreenRefreshApp
         private void LoadSettings()
         {
             screenshotsEnabled = true;
-            screenshotPeriodMs = 2000;
-            userInputDelayMs = 4000; // Default to 2000 ms
+            screenshotPeriodMs = 500;
+            userInputDelayMs = 4000; // Default to 4000 ms
             refreshKey = System.Windows.Forms.Keys.F4;
             refreshThresholdPct = 3.0;
             firstRunMessageShown = false; // Default is false (show message)
@@ -474,7 +486,10 @@ namespace ScreenRefreshApp
             {
                 bool significantChange = await System.Threading.Tasks.Task.Run(() => screenshotProcessor.ProcessScreenshotOnGPU(), cancellationTokenSource.Token);
                 if (significantChange)
+                {
                     doRefresh = true;
+                    lastScreenChangeTime = System.Environment.TickCount; // Record when the change was detected
+                }
             }
             catch (System.Threading.Tasks.TaskCanceledException)
             {
@@ -503,7 +518,8 @@ namespace ScreenRefreshApp
             long currentTime = System.Environment.TickCount;
             if (doRefresh &&
                 (currentTime - lastMouseInputTime >= userInputDelayMs) &&
-                (currentTime - lastButtonInputTime >= userInputDelayMs))
+                (currentTime - lastButtonInputTime >= userInputDelayMs) &&
+                (currentTime - lastScreenChangeTime >= userInputDelayMs)) // Wait for screen to stabilize
             {
                 RefreshScreen();
                 doRefresh = false;
@@ -651,6 +667,10 @@ namespace ScreenRefreshApp
         private const int WH_MOUSE_LL = 14;
         private const int WM_LBUTTONDOWN = 0x0201;
         private const int WM_RBUTTONDOWN = 0x0204;
+        private const int WM_MBUTTONDOWN = 0x0207;
+        private const int WM_XBUTTONDOWN = 0x020B;
+        private const int WM_MOUSEWHEEL = 0x020A;
+        private const int WM_MOUSEHWHEEL = 0x020E;
 
         private delegate System.IntPtr LowLevelMouseProc(int nCode, System.IntPtr wParam, System.IntPtr lParam);
 
@@ -688,15 +708,48 @@ namespace ScreenRefreshApp
 
         private static System.IntPtr HookCallback(int nCode, System.IntPtr wParam, System.IntPtr lParam)
         {
-            if (nCode >= 0 && (wParam == (System.IntPtr)WM_LBUTTONDOWN || wParam == (System.IntPtr)WM_RBUTTONDOWN))
+            if (nCode >= 0)
             {
+                int msg = wParam.ToInt32();
                 MSLLHOOKSTRUCT hookStruct = (MSLLHOOKSTRUCT)System.Runtime.InteropServices.Marshal.PtrToStructure(lParam, typeof(MSLLHOOKSTRUCT));
-                MouseDown?.Invoke(null, new System.Windows.Forms.MouseEventArgs(
-                    wParam == (System.IntPtr)WM_LBUTTONDOWN ? System.Windows.Forms.MouseButtons.Left : System.Windows.Forms.MouseButtons.Right,
-                    1,
-                    hookStruct.pt.X,
-                    hookStruct.pt.Y,
-                    0));
+                System.Windows.Forms.MouseButtons button = System.Windows.Forms.MouseButtons.None;
+                int clicks = 1;
+                int delta = 0;
+
+                switch (msg)
+                {
+                    case WM_LBUTTONDOWN:
+                        button = System.Windows.Forms.MouseButtons.Left;
+                        break;
+                    case WM_RBUTTONDOWN:
+                        button = System.Windows.Forms.MouseButtons.Right;
+                        break;
+                    case WM_MBUTTONDOWN:
+                        button = System.Windows.Forms.MouseButtons.Middle;
+                        break;
+                    case WM_XBUTTONDOWN:
+                        // XBUTTON1 = 0x0001, XBUTTON2 = 0x0002
+                        button = ((hookStruct.mouseData >> 16) & 0xFFFF) == 1
+                            ? System.Windows.Forms.MouseButtons.XButton1
+                            : System.Windows.Forms.MouseButtons.XButton2;
+                        break;
+                    case WM_MOUSEWHEEL:
+                        button = System.Windows.Forms.MouseButtons.None;
+                        delta = (short)((hookStruct.mouseData >> 16) & 0xFFFF);
+                        break;
+                    case WM_MOUSEHWHEEL:
+                        button = System.Windows.Forms.MouseButtons.None;
+                        delta = (short)((hookStruct.mouseData >> 16) & 0xFFFF);
+                        break;
+                }
+
+                // Fire MouseDown for all button presses and wheel events
+                if (button != System.Windows.Forms.MouseButtons.None ||
+                    msg == WM_MOUSEWHEEL || msg == WM_MOUSEHWHEEL)
+                {
+                    MouseDown?.Invoke(null, new System.Windows.Forms.MouseEventArgs(
+                        button, clicks, hookStruct.pt.X, hookStruct.pt.Y, delta));
+                }
             }
             return CallNextHookEx(hookId, nCode, wParam, lParam);
         }
@@ -716,6 +769,30 @@ namespace ScreenRefreshApp
             public uint flags;
             public uint time;
             public System.IntPtr dwExtraInfo;
+        }
+    }
+
+    // Message filter to catch mouse wheel and horizontal wheel events globally
+    public class GlobalMouseWheelMessageFilter : IMessageFilter
+    {
+        private readonly Action onWheel;
+
+        // Windows message constants
+        private const int WM_MOUSEWHEEL = 0x020A;
+        private const int WM_MOUSEHWHEEL = 0x020E;
+
+        public GlobalMouseWheelMessageFilter(Action onWheel)
+        {
+            this.onWheel = onWheel;
+        }
+
+        public bool PreFilterMessage(ref Message m)
+        {
+            if (m.Msg == WM_MOUSEWHEEL || m.Msg == WM_MOUSEHWHEEL)
+            {
+                onWheel?.Invoke();
+            }
+            return false; // Do not block the message
         }
     }
 
