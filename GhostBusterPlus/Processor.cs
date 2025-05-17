@@ -571,6 +571,87 @@ namespace ScreenRefreshApp
         }
 
         /// <summary>
+        /// Reinitializes DirectX resources when switching between displays
+        /// </summary>
+        public void ReinitializeForDisplayChange()
+        {
+            try
+            {
+                System.Console.WriteLine("Reinitializing DirectX resources for display change...");
+                
+                // First dispose existing resources
+                DisposeDirectXResources();
+                
+                // Then initialize fresh resources for the new display
+                InitializeDirectX();
+                
+                System.Console.WriteLine("DirectX resources successfully reinitialized.");
+            }
+            catch (Exception ex)
+            {
+                System.Console.WriteLine($"Failed to reinitialize DirectX resources: {ex.Message}");
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Disposes DirectX resources without disposing the entire object
+        /// </summary>
+        private void DisposeDirectXResources()
+        {
+            try
+            {
+                // Dispose textures
+                previousGrayscaleTexture?.Dispose();
+                previousGrayscaleTexture = null;
+                currentGrayscaleTexture?.Dispose();
+                currentGrayscaleTexture = null;
+
+                // Dispose views
+                grayscaleUAV?.Dispose();
+                grayscaleUAV = null;
+                previousGrayscaleSRV?.Dispose();
+                previousGrayscaleSRV = null;
+                currentGrayscaleSRV?.Dispose();
+                currentGrayscaleSRV = null;
+                resultUAV?.Dispose();
+                resultUAV = null;
+
+                // Dispose buffers
+                resultBuffer?.Dispose();
+                resultBuffer = null;
+                resultStagingBuffer?.Dispose();
+                resultStagingBuffer = null;
+
+                // Dispose shaders
+                grayscaleComputeShader?.Dispose();
+                grayscaleComputeShader = null;
+                compareComputeShader?.Dispose();
+                compareComputeShader = null;
+
+                // Dispose DXGI resources
+                outputDuplication?.Dispose();
+                outputDuplication = null;
+                output?.Dispose();
+                output = null;
+                adapter?.Dispose();
+                adapter = null;
+                dxgiFactory?.Dispose();
+                dxgiFactory = null;
+
+                // Dispose the device last
+                d3dDevice?.Dispose();
+                d3dDevice = null;
+                
+                System.Console.WriteLine("DirectX resources successfully disposed");
+            }
+            catch (Exception ex)
+            {
+                System.Console.WriteLine($"Error during DirectX resource disposal: {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// Disposes of all DirectX resources.
         /// This must be called when the processor is no longer needed to avoid memory leaks.
         /// </summary>

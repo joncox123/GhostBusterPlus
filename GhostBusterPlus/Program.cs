@@ -77,6 +77,7 @@ namespace ScreenRefreshApp
         private System.Windows.Forms.Timer mouseCheckTimer; // Timer for checking mouse movement
         private System.Windows.Forms.Timer screenshotTimer; // Timer for capturing screenshots
         private System.Windows.Forms.Timer refreshCheckTimer; // Timer for checking refresh conditions
+        private System.Windows.Forms.Timer displayCheckTimer; // Timer for checking active display
         private System.Drawing.Point lastMousePosition; // Last recorded mouse cursor position
         private long lastMouseInputTime; // Timestamp (ms) of last mouse movement
         private long lastButtonInputTime; // Timestamp (ms) of last keyboard/mouse button input
@@ -96,6 +97,9 @@ namespace ScreenRefreshApp
         private string eInkThemePath;
         private string darkThemePath;
         private bool detectCursorMovement = false; // Default to false/disabled
+        private bool isEInkDisplayActive = false; // Is the e-Ink display the currently active one?
+        private System.Windows.Forms.ToolStripMenuItem displayIndicatorMenuItem; // Menu item to show current display
+        private bool autoSwitchTheme = true; // Default to true/enabled
         
         // P/Invoke for simulating keyboard events
         [System.Runtime.InteropServices.DllImport("user32.dll")]
@@ -105,6 +109,11 @@ namespace ScreenRefreshApp
         // P/Invoke for generating console beep
         [System.Runtime.InteropServices.DllImport("kernel32.dll")]
         private static extern void Beep(uint dwFreq, uint dwDuration);
+
+        // P/Invoke for display settings
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern bool EnumDisplaySettings(string deviceName, int modeNum, ref DEVMODE devMode);
+        private const int ENUM_CURRENT_SETTINGS = -1;
 
         /// <summary>
         /// Constructor for the ScreenRefreshApp.
@@ -133,6 +142,7 @@ namespace ScreenRefreshApp
             }
             
             UpdateTrayMenu();
+            UpdateActiveDisplay(forceCheck:true);
             InitializeTimers();
             InitializeInputHooks();
 
@@ -313,12 +323,28 @@ namespace ScreenRefreshApp
                 SaveSettings();
             };
 
+            // Auto-switch Theme menu item 
+            System.Windows.Forms.ToolStripMenuItem autoSwitchThemeMenu = new System.Windows.Forms.ToolStripMenuItem("Auto-switch Theme");
+            autoSwitchThemeMenu.Checked = autoSwitchTheme;
+            autoSwitchThemeMenu.Click += (s, e) =>
+            {
+                autoSwitchTheme = !autoSwitchTheme;
+                UpdateTrayMenu();
+                SaveSettings();
+            };
+
+            // Display indicator menu
+            displayIndicatorMenuItem = new System.Windows.Forms.ToolStripMenuItem("Active Display: Unknown");
+            displayIndicatorMenuItem.Enabled = false; // Make it non-clickable, just informational
+            trayMenu.Items.Add(new ToolStripSeparator()); // Add a separator
+            trayMenu.Items.Add(displayIndicatorMenuItem);
+
             // About menu item
             System.Windows.Forms.ToolStripMenuItem aboutMenu = new System.Windows.Forms.ToolStripMenuItem("About GhostBusterPlus...");
             aboutMenu.Click += (s, e) =>
             {
                 System.Windows.Forms.MessageBox.Show(
-                    "GhostBusterPlus v0.2, by joncox123. Enhancing your Lenovo ThinkBook Plus Gen 4 experience. " +
+                    "GhostBusterPlus v0.3, by joncox123. Enhancing your Lenovo ThinkBook Plus Gen 4 experience. " +
                     "Copyright (c) 2025, all rights reserved. No warranty or suitability for any purpose is implied or provided.",
                     "About GhostBusterPlus",
                     System.Windows.Forms.MessageBoxButtons.OK,
@@ -338,8 +364,9 @@ namespace ScreenRefreshApp
             { 
                 screenshotPeriodMenu, 
                 enableScreenshotsMenu, 
-                detectCursorMenu,      // New item
-                restartEInkPlusMenu,   // New item
+                detectCursorMenu,
+                autoSwitchThemeMenu,      // Add the new menu item here
+                restartEInkPlusMenu,
                 refreshKeyMenu, 
                 inputDelayMenu, 
                 thresholdMenu, 
@@ -457,53 +484,62 @@ namespace ScreenRefreshApp
         /// </summary>
         private void UpdateTrayMenu()
         {
-            foreach (System.Windows.Forms.ToolStripMenuItem item in trayMenu.Items)
+            foreach (var item in trayMenu.Items)
             {
-                if (item.Text == "Screenshot Period")
+                if (item is System.Windows.Forms.ToolStripMenuItem menuItem)
                 {
-                    foreach (System.Windows.Forms.ToolStripMenuItem subItem in item.DropDownItems)
+                    if (menuItem.Text == "Screenshot Period")
                     {
-                        bool isSelected = subItem.Text == $"{screenshotPeriodMs} ms";
-                        subItem.Checked = isSelected;
-                        subItem.Font = new System.Drawing.Font(subItem.Font ?? System.Drawing.SystemFonts.MenuFont, isSelected ? System.Drawing.FontStyle.Bold : System.Drawing.FontStyle.Regular);
+                        foreach (System.Windows.Forms.ToolStripMenuItem subItem in menuItem.DropDownItems)
+                        {
+                            bool isSelected = subItem.Text == $"{screenshotPeriodMs} ms";
+                            subItem.Checked = isSelected;
+                            subItem.Font = new System.Drawing.Font(subItem.Font ?? System.Drawing.SystemFonts.MenuFont, isSelected ? System.Drawing.FontStyle.Bold : System.Drawing.FontStyle.Regular);
+                        }
                     }
-                }
-                else if (item.Text.Contains("Enabled") || item.Text.Contains("Disabled"))
-                {
-                    item.Text = screenshotsEnabled ? "Enabled (Ctrl+Shift+X)" : "Disabled (Ctrl+Shift+X)";
-                }
-                else if (item.Text == "Refresh Key")
-                {
-                    foreach (System.Windows.Forms.ToolStripMenuItem subItem in item.DropDownItems)
+                    else if (menuItem.Text.Contains("Enabled") || menuItem.Text.Contains("Disabled"))
                     {
-                        bool isSelected = subItem.Text == refreshKey.ToString();
-                        subItem.Checked = isSelected;
-                        subItem.Font = new System.Drawing.Font(subItem.Font ?? System.Drawing.SystemFonts.MenuFont, isSelected ? System.Drawing.FontStyle.Bold : System.Drawing.FontStyle.Regular);
+                        menuItem.Text = screenshotsEnabled ? "Enabled (Ctrl+Shift+X)" : "Disabled (Ctrl+Shift+X)";
                     }
-                }
-                else if (item.Text == "User Input Delay")
-                {
-                    foreach (System.Windows.Forms.ToolStripMenuItem subItem in item.DropDownItems)
+                    else if (menuItem.Text == "Refresh Key")
                     {
-                        bool isSelected = subItem.Text == $"{userInputDelayMs} ms";
-                        subItem.Checked = isSelected;
-                        subItem.Font = new System.Drawing.Font(subItem.Font ?? System.Drawing.SystemFonts.MenuFont, isSelected ? System.Drawing.FontStyle.Bold : System.Drawing.FontStyle.Regular);
+                        foreach (System.Windows.Forms.ToolStripMenuItem subItem in menuItem.DropDownItems)
+                        {
+                            bool isSelected = subItem.Text == refreshKey.ToString();
+                            subItem.Checked = isSelected;
+                            subItem.Font = new System.Drawing.Font(subItem.Font ?? System.Drawing.SystemFonts.MenuFont, isSelected ? System.Drawing.FontStyle.Bold : System.Drawing.FontStyle.Regular);
+                        }
                     }
-                }
-                else if (item.Text == "Refresh Threshold")
-                {
-                    foreach (System.Windows.Forms.ToolStripMenuItem subItem in item.DropDownItems)
+                    else if (menuItem.Text == "User Input Delay")
                     {
-                        bool isSelected = subItem.Text == $"{refreshThresholdPct}%";
-                        subItem.Checked = isSelected;
-                        subItem.Font = new System.Drawing.Font(subItem.Font ?? System.Drawing.SystemFonts.MenuFont, isSelected ? System.Drawing.FontStyle.Bold : System.Drawing.FontStyle.Regular);
+                        foreach (System.Windows.Forms.ToolStripMenuItem subItem in menuItem.DropDownItems)
+                        {
+                            bool isSelected = subItem.Text == $"{userInputDelayMs} ms";
+                            subItem.Checked = isSelected;
+                            subItem.Font = new System.Drawing.Font(subItem.Font ?? System.Drawing.SystemFonts.MenuFont, isSelected ? System.Drawing.FontStyle.Bold : System.Drawing.FontStyle.Regular);
+                        }
                     }
-                }
-                else if (item.Text == "Detect cursor movement")
-                {
-                    item.Checked = detectCursorMovement;
-                    item.Font = new System.Drawing.Font(item.Font ?? System.Drawing.SystemFonts.MenuFont, 
-                        detectCursorMovement ? System.Drawing.FontStyle.Bold : System.Drawing.FontStyle.Regular);
+                    else if (menuItem.Text == "Refresh Threshold")
+                    {
+                        foreach (System.Windows.Forms.ToolStripMenuItem subItem in menuItem.DropDownItems)
+                        {
+                            bool isSelected = subItem.Text == $"{refreshThresholdPct}%";
+                            subItem.Checked = isSelected;
+                            subItem.Font = new System.Drawing.Font(subItem.Font ?? System.Drawing.SystemFonts.MenuFont, isSelected ? System.Drawing.FontStyle.Bold : System.Drawing.FontStyle.Regular);
+                        }
+                    }
+                    else if (menuItem.Text == "Detect cursor movement")
+                    {
+                        menuItem.Checked = detectCursorMovement;
+                        menuItem.Font = new System.Drawing.Font(menuItem.Font ?? System.Drawing.SystemFonts.MenuFont, 
+                            detectCursorMovement ? System.Drawing.FontStyle.Bold : System.Drawing.FontStyle.Regular);
+                    }
+                    else if (menuItem.Text == "Auto-switch Theme")
+                    {
+                        menuItem.Checked = autoSwitchTheme;
+                        menuItem.Font = new System.Drawing.Font(menuItem.Font ?? System.Drawing.SystemFonts.MenuFont, 
+                            autoSwitchTheme ? System.Drawing.FontStyle.Bold : System.Drawing.FontStyle.Regular);
+                    }
                 }
             }
         }
@@ -520,6 +556,7 @@ namespace ScreenRefreshApp
             refreshThresholdPct = 3.0;
             firstRunMessageShown = false; // Default is false (show message)
             detectCursorMovement = false; // Default to disabled
+            autoSwitchTheme = true; // Default to true
             
             if (System.IO.File.Exists(iniPath))
             {
@@ -538,6 +575,7 @@ namespace ScreenRefreshApp
                             case "RefreshThresholdPct": refreshThresholdPct = double.Parse(parts[1].Trim()); break;
                             case "FirstRunMessageShown": firstRunMessageShown = bool.Parse(parts[1].Trim()); break;
                             case "DetectCursorMovement": detectCursorMovement = bool.Parse(parts[1].Trim()); break;
+                            case "AutoSwitchTheme": autoSwitchTheme = bool.Parse(parts[1].Trim()); break;
                         }
                     }
                 }
@@ -560,9 +598,77 @@ namespace ScreenRefreshApp
                 $"RefreshKey={refreshKey}",
                 $"RefreshThresholdPct={refreshThresholdPct}",
                 $"FirstRunMessageShown={firstRunMessageShown}",
-                $"DetectCursorMovement={detectCursorMovement}"
+                $"DetectCursorMovement={detectCursorMovement}",
+                $"AutoSwitchTheme={autoSwitchTheme}"
             };
             System.IO.File.WriteAllLines(iniPath, settings);
+        }
+
+        private void UpdateActiveDisplay(bool forceCheck = false)
+        {
+            bool previousIsEInk = isEInkDisplayActive;
+            isEInkDisplayActive = DetectEInkDisplayActive();
+
+            // Update UI if the active display changed
+            if (previousIsEInk != isEInkDisplayActive || forceCheck)
+            {
+                displayIndicatorMenuItem.Text = $"Active Display: {(isEInkDisplayActive ? "eInk" : "Main LCD")}";
+                displayIndicatorMenuItem.ForeColor = isEInkDisplayActive ? Color.DarkGreen : Color.Blue;
+                Debug.WriteLine($"Active display changed to: {(isEInkDisplayActive ? "eInk" : "Main LCD")}");
+                
+                // Handle DirectX reinitialization for display change
+                try
+                {
+                    // Reinitialize the DirectX resources
+                    screenshotProcessor.ReinitializeForDisplayChange();
+                    
+                    // Reset the screen change state
+                    doRefresh = false;
+                    lastScreenChangeTime = Environment.TickCount;
+                    
+                    // Take a fresh initial screenshot with the new display context
+                    TakeInitialScreenshot();
+                    
+                    Debug.WriteLine("Screenshot processor successfully reinitialized for new display");
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Failed to reinitialize for display change: {ex.Message}");
+                    
+                    // If reinitialization fails, temporarily disable screenshots until next check
+                    if (screenshotsEnabled)
+                    {
+                        screenshotTimer.Enabled = false;
+                        System.Threading.Timer restartTimer = null;
+                        restartTimer = new System.Threading.Timer((state) =>
+                        {
+                            try
+                            {
+                                if (screenshotsEnabled)
+                                {
+                                    screenshotTimer.Enabled = true;
+                                    Debug.WriteLine("Screenshot timer re-enabled after display change");
+                                }
+                                restartTimer?.Dispose();
+                            }
+                            catch { }
+                        }, null, 3000, Timeout.Infinite);
+                    }
+                }
+                
+                // Auto-switch theme if enabled and display has changed
+                if (autoSwitchTheme && (previousIsEInk != isEInkDisplayActive || forceCheck))
+                {
+                    if (isEInkDisplayActive)
+                    {
+                        ApplyTheme(eInkThemePath);
+                    }
+                    else
+                    {
+                        ApplyTheme(darkThemePath);
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -581,6 +687,10 @@ namespace ScreenRefreshApp
             refreshCheckTimer = new System.Windows.Forms.Timer { Interval = 100 };
             refreshCheckTimer.Tick += (s, e) => CheckForRefresh();
             refreshCheckTimer.Start();
+
+            displayCheckTimer = new System.Windows.Forms.Timer { Interval = 2000 }; // Check every 2 seconds
+            displayCheckTimer.Tick += (s, e) => UpdateActiveDisplay();
+            displayCheckTimer.Start();
         }
 
         /// <summary>
@@ -595,6 +705,7 @@ namespace ScreenRefreshApp
             mouseCheckTimer?.Stop();
             screenshotTimer?.Stop();
             refreshCheckTimer?.Stop();
+            displayCheckTimer?.Stop();
 
             // Release hooks
             KeyboardHook.ReleaseHook();
@@ -616,6 +727,7 @@ namespace ScreenRefreshApp
             mouseCheckTimer?.Dispose();
             screenshotTimer?.Dispose();
             refreshCheckTimer?.Dispose();
+            displayCheckTimer?.Dispose();
             screenshotProcessor?.Dispose();
 
             System.Windows.Forms.Application.Exit();
@@ -634,7 +746,7 @@ namespace ScreenRefreshApp
             {
                 // Explicitly check for wheel events as well as button presses
                 lastButtonInputTime = System.Environment.TickCount;
-                System.Console.WriteLine($"Mouse input: Button={e.Button}, Delta={e.Delta}, X={e.X}, Y={e.Y}");
+                // System.Console.WriteLine($"Mouse input: Button={e.Button}, Delta={e.Delta}, X={e.X}, Y={e.Y}");
             };
 
             // Add application-level message handling for touchpad gestures
@@ -652,7 +764,15 @@ namespace ScreenRefreshApp
         {
             if (screenshotsEnabled)
             {
-                screenshotProcessor.ProcessScreenshotOnGPU();
+                try
+                {
+                    screenshotProcessor.ProcessScreenshotOnGPU();
+                    Debug.WriteLine("Initial screenshot captured successfully");
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Failed to capture initial screenshot: {ex.Message}");
+                }
             }
         }
 
@@ -661,7 +781,7 @@ namespace ScreenRefreshApp
         /// </summary>
         private async System.Threading.Tasks.Task CaptureAndCompareScreenshotAsync()
         {
-            if (!screenshotsEnabled) return;
+            if (!screenshotsEnabled || !isEInkDisplayActive) return;
 
             try
             {
@@ -675,6 +795,34 @@ namespace ScreenRefreshApp
             catch (System.Threading.Tasks.TaskCanceledException)
             {
                 System.Diagnostics.Debug.WriteLine("Screenshot capture task was cancelled during shutdown.");
+            }
+            catch (SharpDX.SharpDXException ex) when 
+                (ex.ResultCode.Code == SharpDX.DXGI.ResultCode.DeviceRemoved.Code || 
+                 ex.ResultCode.Code == SharpDX.DXGI.ResultCode.DeviceReset.Code || 
+                 ex.ResultCode.Code == SharpDX.DXGI.ResultCode.AccessLost.Code)
+            {
+                Debug.WriteLine($"DirectX device lost access during screenshot capture: {ex.Message}");
+                
+                // Schedule a DirectX reinitialization
+                System.Threading.Timer reinitTimer = null;
+                reinitTimer = new System.Threading.Timer((state) =>
+                {
+                    try
+                    {
+                        // Force a display check which will trigger reinitialization
+                        UpdateActiveDisplay(forceCheck: true);
+                        reinitTimer?.Dispose();
+                    }
+                    catch (Exception reinitEx)
+                    {
+                        Debug.WriteLine($"Failed to reinitialize after access loss: {reinitEx.Message}");
+                    }
+                }, null, 1000, Timeout.Infinite);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Screenshot processing failed with unexpected error: {ex.Message}");
+                // For unexpected errors, let the process continue but log the error
             }
         }
 
@@ -714,10 +862,12 @@ namespace ScreenRefreshApp
         /// </summary>
         private void RefreshScreen()
         {
-            keybd_event((byte)refreshKey, 0, 0, 0);
-            System.Threading.Thread.Sleep(10);
-            keybd_event((byte)refreshKey, 0, KEYEVENTF_KEYUP, 0);
-            // Beep(1000, 200);
+            if (isEInkDisplayActive) {
+                keybd_event((byte)refreshKey, 0, 0, 0);
+                System.Threading.Thread.Sleep(10);
+                keybd_event((byte)refreshKey, 0, KEYEVENTF_KEYUP, 0);
+                // Beep(1000, 200);
+            }
         }
 
         /// <summary>
@@ -787,7 +937,7 @@ namespace ScreenRefreshApp
             try
             {
                 System.Console.WriteLine($"Applying theme: {themePath}");
-                Process settingsProcess = null;
+                // Process settingsProcess = null;
                 Process themeProcess = null;
 
                 // Method 1: Direct theme file execution (most effective)
@@ -886,6 +1036,71 @@ namespace ScreenRefreshApp
         private const uint WM_CLOSE = 0x0010;
 
         /// <summary>
+        /// Detects whether the e-Ink display is currently active based on multiple indicators
+        /// </summary>
+        /// <returns>True if the e-Ink display is active, false if the main LCD is active</returns>
+        private bool DetectEInkDisplayActive()
+        {
+            try
+            {
+                // Method 1: Check refresh rate - most reliable differentiator
+                // eInk has ~24Hz refresh rate, main LCD has ~60Hz
+                foreach (Screen screen in Screen.AllScreens)
+                {
+                    try
+                    {
+                        DEVMODE dm = new DEVMODE();
+                        dm.dmSize = (short)Marshal.SizeOf(typeof(DEVMODE));
+                        
+                        if (EnumDisplaySettings(screen.DeviceName, ENUM_CURRENT_SETTINGS, ref dm))
+                        {
+                            // If this screen has ~24Hz refresh rate, it's likely the eInk display
+                            if (dm.dmDisplayFrequency > 20 && dm.dmDisplayFrequency < 26)
+                            {
+                                // Check if cursor is on this screen, which would indicate it's active
+                                if (screen.Bounds.Contains(Cursor.Position))
+                                    return true;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Error checking display settings: {ex.Message}");
+                    }
+                }
+                
+                // Method 2: Check if cursor is on a screen with a size closer to the eInk dimensions
+                Point cursorPos = Cursor.Position;
+                foreach (Screen screen in Screen.AllScreens)
+                {
+                    if (screen.Bounds.Contains(cursorPos))
+                    {
+                        // eInk is 2560x1600, main is 2880x1800
+                        // Even with scaling, the aspect ratio and relative dimensions should be similar
+                        double aspectRatio = (double)screen.Bounds.Width / screen.Bounds.Height;
+                        
+                        // If aspect ratio is closer to eInk's 1.6 than main display's 1.8
+                        // (allowing for some tolerance due to scaling)
+                        if (Math.Abs(aspectRatio - (2560.0/1600.0)) < Math.Abs(aspectRatio - (2880.0/1800.0)))
+                        {
+                            return true;
+                        }
+                        
+                        break; // We found the screen with the cursor
+                    }
+                }
+
+                // Default to false - main LCD is more commonly used
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Exception in DetectEInkDisplayActive: {ex.Message}");
+                return false; // Default to main LCD on error
+            }
+        }
+
+        /// <summary>
         /// Cleans up resources.
         /// </summary>
         protected override void Dispose(bool disposing)
@@ -898,6 +1113,7 @@ namespace ScreenRefreshApp
                 mouseCheckTimer?.Dispose();
                 screenshotTimer?.Dispose();
                 refreshCheckTimer?.Dispose();
+                displayCheckTimer?.Dispose();
                 screenshotProcessor?.Dispose();
                 KeyboardHook.ReleaseHook();
                 MouseHook.ReleaseHook();
@@ -1159,5 +1375,42 @@ namespace ScreenRefreshApp
                 System.Windows.Forms.Application.Run();
             }
         }
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    public struct DEVMODE
+    {
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string dmDeviceName;
+        public short dmSpecVersion;
+        public short dmDriverVersion;
+        public short dmSize;
+        public short dmDriverExtra;
+        public int dmFields;
+        public int dmPositionX;
+        public int dmPositionY;
+        public int dmDisplayOrientation;
+        public int dmDisplayFixedOutput;
+        public short dmColor;
+        public short dmDuplex;
+        public short dmYResolution;
+        public short dmTTOption;
+        public short dmCollate;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string dmFormName;
+        public short dmLogPixels;
+        public int dmBitsPerPel;
+        public int dmPelsWidth;
+        public int dmPelsHeight;
+        public int dmDisplayFlags;
+        public int dmDisplayFrequency;
+        public int dmICMMethod;
+        public int dmICMIntent;
+        public int dmMediaType;
+        public int dmDitherType;
+        public int dmReserved1;
+        public int dmReserved2;
+        public int dmPanningWidth;
+        public int dmPanningHeight;
     }
 }
