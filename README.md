@@ -31,7 +31,7 @@ First, you need to have the latest version of EInkPlus installed on your system.
 
 ## System Requirements
 - Lenovo ThinkPad Plus Gen 4
-  - Should work with the Gen 2 with very minimal changes, if any. Probably just need to change the name of the floating layover app from "4" to "2".
+  - Should work with the Gen 2 with very minimal changes, if any.
 - Windows 11
   - Tested on update 24H2 with eInkPlus app version 1.0.124.3
 
