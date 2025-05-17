@@ -120,7 +120,10 @@ namespace ScreenRefreshApp
             LoadSettings();
             lastScreenChangeTime = System.Environment.TickCount; // Initialize to now
             
-            // Copy theme files on first run
+            // Initialize theme paths - MUST happen regardless of first run status
+            InitializeThemePaths();
+            
+            // Copy theme files on first run only
             if (!firstRunMessageShown)
             {
                 CopyThemeFiles();
@@ -136,7 +139,6 @@ namespace ScreenRefreshApp
 
             TakeInitialScreenshot();
 
-            // Add hotkeys for theme switching
             KeyboardHook.AddHotkey(System.Windows.Forms.Keys.D | System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.Shift, () =>
             {
                 screenshotsEnabled = !screenshotsEnabled;
@@ -154,6 +156,27 @@ namespace ScreenRefreshApp
             {
                 ApplyTheme(eInkThemePath);
             });
+        }
+
+        /// <summary>
+        /// Initializes theme paths regardless of whether it's first run or not
+        /// </summary>
+        private void InitializeThemePaths()
+        {
+            // Always set up the theme paths
+            eInkThemePath = Path.Combine(userThemesPath, "eInk.theme");
+            darkThemePath = Path.Combine(userThemesPath, "Dark.theme");
+            
+            // Verify theme files exist
+            if (!File.Exists(eInkThemePath))
+                System.Console.WriteLine($"Warning: eInk theme file not found at {eInkThemePath}");
+            else
+                System.Console.WriteLine($"eInk theme file found at {eInkThemePath}");
+                
+            if (!File.Exists(darkThemePath))
+                System.Console.WriteLine($"Warning: Dark theme file not found at {darkThemePath}");
+            else
+                System.Console.WriteLine($"Dark theme file found at {darkThemePath}");
         }
 
         /// <summary>
@@ -485,7 +508,19 @@ namespace ScreenRefreshApp
             KeyboardHook.SetHook();
             MouseHook.SetHook();
             KeyboardHook.KeyDown += (s, e) => lastButtonInputTime = System.Environment.TickCount;
-            MouseHook.MouseDown += (s, e) => lastButtonInputTime = System.Environment.TickCount;
+            MouseHook.MouseDown += (s, e) => 
+            {
+                // Explicitly check for wheel events as well as button presses
+                lastButtonInputTime = System.Environment.TickCount;
+                System.Console.WriteLine($"Mouse input: Button={e.Button}, Delta={e.Delta}, X={e.X}, Y={e.Y}");
+            };
+
+            // Add application-level message handling for touchpad gestures
+            Application.AddMessageFilter(new GlobalMouseWheelMessageFilter(() =>
+            {
+                lastButtonInputTime = System.Environment.TickCount;
+                System.Console.WriteLine("Mouse wheel message detected through message filter");
+            }));
         }
 
         /// <summary>
@@ -614,7 +649,7 @@ namespace ScreenRefreshApp
         }
 
         /// <summary>
-        /// Applies Windows theme using a method identical to AutoHotkey V2's implementation
+        /// Applies Windows theme using a robust method that works reliably on Windows 11
         /// </summary>
         /// <param name="themePath">Full path to the theme file</param>
         private void ApplyTheme(string themePath)
@@ -627,75 +662,85 @@ namespace ScreenRefreshApp
 
             try
             {
-                // The proper Windows 11 way to apply themes - this is what AutoHotkey V2 does:
-                // 1. ShellExecute the .theme file directly with the "open" verb
-                // 2. Use proper parameters to ensure application happens synchronously
+                System.Console.WriteLine($"Attempting to apply theme: {themePath}");
 
-                ProcessStartInfo startInfo = new ProcessStartInfo
+                // Method 1: Use the most direct approach first - ShellExecute with "open" verb
+                try
                 {
-                    FileName = themePath,
-                    UseShellExecute = true,
-                    Verb = "open"  // Critical - tells Windows to use the default handler
-                };
-
-                using (Process process = Process.Start(startInfo))
+                    Process themeProcess = new Process();
+                    themeProcess.StartInfo = new ProcessStartInfo
+                    {
+                        FileName = themePath,
+                        UseShellExecute = true,
+                        Verb = "open"
+                    };
+                    
+                    themeProcess.Start();
+                    
+                    // Give Windows more time to process
+                    Thread.Sleep(1000);
+                }
+                catch (Exception ex)
                 {
-                    // Wait a moment to ensure system has time to process
-                    Thread.Sleep(500);
+                    System.Console.WriteLine($"Direct theme execution failed: {ex.Message}");
                 }
 
-                // Also register the theme in the registry for persistence
+                // Method 2: Use the Control Panel method that's known to work
+                try
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "control.exe",
+                        Arguments = $"desk.cpl,,5",
+                        UseShellExecute = true
+                    });
+                    
+                    // Wait for control panel to open
+                    Thread.Sleep(300);
+                    
+                    // Now directly open the theme file after control panel is open
+                    Process.Start(new ProcessStartInfo 
+                    {
+                        FileName = themePath,
+                        UseShellExecute = true
+                    });
+                    
+                    Thread.Sleep(500);
+                }
+                catch (Exception ex)
+                {
+                    System.Console.WriteLine($"Control Panel method failed: {ex.Message}");
+                }
+
+                // Registry approach as a backup
                 try
                 {
                     Microsoft.Win32.Registry.SetValue(
                         @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes",
-                        "CurrentTheme",
+                        "CurrentTheme", 
                         themePath,
                         Microsoft.Win32.RegistryValueKind.String);
-
-                    // Force Windows to reload personalization settings
-                    using (Process refreshProcess = new Process())
-                    {
-                        refreshProcess.StartInfo.FileName = "taskkill";
-                        refreshProcess.StartInfo.Arguments = "/f /im systemsettings.exe";
-                        refreshProcess.StartInfo.CreateNoWindow = true;
-                        refreshProcess.StartInfo.UseShellExecute = false;
-                        refreshProcess.Start();
-                    }
+                        
+                    // Force a UI update
+                    PostThemeChangedMessage();
                 }
                 catch (Exception ex)
                 {
-                    System.Console.WriteLine($"Registry update failed: {ex.Message}");
+                    System.Console.WriteLine($"Registry method failed: {ex.Message}");
                 }
 
-                // Show success notification
+                // Show notification to user
                 trayIcon.ShowBalloonTip(
                     2000,
-                    "Theme Applied",
-                    $"Switched to {Path.GetFileNameWithoutExtension(themePath)} theme.",
+                    "Theme Change",
+                    $"Switched to {Path.GetFileNameWithoutExtension(themePath)} theme",
                     ToolTipIcon.Info);
-
+                    
                 System.Console.WriteLine($"Applied theme: {Path.GetFileName(themePath)}");
             }
             catch (Exception ex)
             {
                 System.Console.WriteLine($"Theme application failed: {ex.Message}");
-
-                // Fallback to the older methods
-                try
-                {
-                    ProcessStartInfo deskCplInfo = new ProcessStartInfo
-                    {
-                        FileName = "rundll32.exe",
-                        Arguments = $"shell32.dll,Control_RunDLL desk.cpl,,5 \"{themePath}\"",
-                        UseShellExecute = true
-                    };
-                    Process.Start(deskCplInfo);
-                }
-                catch (Exception fallbackEx)
-                {
-                    System.Console.WriteLine($"Fallback method failed: {fallbackEx.Message}");
-                }
             }
         }
 
