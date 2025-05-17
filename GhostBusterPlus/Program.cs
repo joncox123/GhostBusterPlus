@@ -95,6 +95,7 @@ namespace ScreenRefreshApp
         private string userThemesPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Themes");
         private string eInkThemePath;
         private string darkThemePath;
+        private bool detectCursorMovement = false; // Default to false/disabled
         
         // P/Invoke for simulating keyboard events
         [System.Runtime.InteropServices.DllImport("user32.dll")]
@@ -141,14 +142,14 @@ namespace ScreenRefreshApp
             TakeInitialScreenshot();
 
             // Add hotkeys for theme switching
-            KeyboardHook.AddHotkey(System.Windows.Forms.Keys.D | System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.Shift, () =>
+            KeyboardHook.AddHotkey(System.Windows.Forms.Keys.D | System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.Shift, () => 
             {
-                ToggleScreenshots(); // Updated to use the shared method
+                RestartEInkPlus(null, null); // Use RestartEInkPlus method for Ctrl+Shift+D
             });
             
             KeyboardHook.AddHotkey(System.Windows.Forms.Keys.X | System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.Shift, () =>
             {
-                ToggleScreenshots(); // New hotkey for toggling screenshots
+                ToggleScreenshots(); // Keep Ctrl+Shift+X for toggling screenshots
             });
             
             KeyboardHook.AddHotkey(System.Windows.Forms.Keys.S | System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.Shift, () =>
@@ -298,6 +299,20 @@ namespace ScreenRefreshApp
             eInkThemeMenuItem.Click += (s, e) => ApplyTheme(eInkThemePath);
             themeMenu.DropDownItems.Add(eInkThemeMenuItem);
 
+            // Restart EInkPlus menu item
+            System.Windows.Forms.ToolStripMenuItem restartEInkPlusMenu = new System.Windows.Forms.ToolStripMenuItem("Restart EInkPlus (Ctrl+Shift+D)");
+            restartEInkPlusMenu.Click += RestartEInkPlus;
+
+            // Detect cursor movement menu item
+            System.Windows.Forms.ToolStripMenuItem detectCursorMenu = new System.Windows.Forms.ToolStripMenuItem("Detect cursor movement");
+            detectCursorMenu.Checked = detectCursorMovement;
+            detectCursorMenu.Click += (s, e) =>
+            {
+                detectCursorMovement = !detectCursorMovement;
+                UpdateTrayMenu();
+                SaveSettings();
+            };
+
             // About menu item
             System.Windows.Forms.ToolStripMenuItem aboutMenu = new System.Windows.Forms.ToolStripMenuItem("About GhostBusterPlus...");
             aboutMenu.Click += (s, e) =>
@@ -323,6 +338,8 @@ namespace ScreenRefreshApp
             { 
                 screenshotPeriodMenu, 
                 enableScreenshotsMenu, 
+                detectCursorMenu,      // New item
+                restartEInkPlusMenu,   // New item
                 refreshKeyMenu, 
                 inputDelayMenu, 
                 thresholdMenu, 
@@ -338,6 +355,83 @@ namespace ScreenRefreshApp
                 Visible = true,
                 Text = "GhostBusterPlus"
             };
+        }
+
+        private static void RestartEInkPlus(object sender, EventArgs e)
+        {
+            Debug.WriteLine("Restarting EInkPlus processes...");
+
+            try
+            {
+                Console.Beep(350, 200);
+
+                // Step 1: Kill the processes "LenovoGen4.Launcher" and "LenovoGen4.FlyoutButton"
+                Process[] launcherProcesses = Process.GetProcessesByName("LenovoGen4.Launcher");
+                Process[] flyoutProcesses = Process.GetProcessesByName("LenovoGen4.FlyoutButton");
+
+                foreach (Process process in launcherProcesses)
+                {
+                    Debug.WriteLine($"Killing process LenovoGen4.Launcher (PID: {process.Id})...");
+                    process.Kill();
+                    process.WaitForExit(5000); // Wait up to 5 seconds for the process to exit
+                    Debug.WriteLine($"Process LenovoGen4.Launcher (PID: {process.Id}) terminated.");
+                }
+
+                foreach (Process process in flyoutProcesses)
+                {
+                    Debug.WriteLine($"Killing process LenovoGen4.FlyoutButton (PID: {process.Id})...");
+                    process.Kill();
+                    process.WaitForExit(5000); // Wait up to 5 seconds for the process to exit
+                    Debug.WriteLine($"Process LenovoGen4.FlyoutButton (PID: {process.Id}) terminated.");
+                }
+
+                // Step 3: Wait until both processes are no longer running
+                while (Process.GetProcessesByName("LenovoGen4.Launcher").Length > 0 ||
+                       Process.GetProcessesByName("LenovoGen4.FlyoutButton").Length > 0)
+                {
+                    Debug.WriteLine("Waiting for LenovoGen4 processes to terminate...");
+                    System.Threading.Thread.Sleep(100);
+                }
+                Debug.WriteLine("All LenovoGen4 processes have terminated.");
+
+                // Step 4: Add a brief delay of 1000 ms
+                System.Threading.Thread.Sleep(1000);
+                Debug.WriteLine("Waited 1000 ms after process termination.");
+
+                // Step 5: Restart LenovoGen4.Launcher.exe with proper working directory and window style
+                string launcherPath = @"C:\Program Files\Lenovo\ThinkBookEinkPlus\LenovoGen4.Launcher.exe";
+                Debug.WriteLine($"Starting LenovoGen4.Launcher from {launcherPath}...");
+
+                ProcessStartInfo startInfo = new ProcessStartInfo
+                {
+                    FileName = launcherPath,
+                    WorkingDirectory = @"C:\Program Files\Lenovo\ThinkBookEinkPlus", // Set working directory
+                    WindowStyle = ProcessWindowStyle.Normal // Set to "Normal window"
+                };
+
+                Process.Start(startInfo);
+
+                // Step 6: Wait until LenovoGen4.Launcher is running again
+                while (Process.GetProcessesByName("LenovoGen4.Launcher").Length == 0)
+                {
+                    Debug.WriteLine("Waiting for LenovoGen4.Launcher to restart...");
+                    System.Threading.Thread.Sleep(100);
+                }
+                Debug.WriteLine("LenovoGen4.Launcher has restarted.");
+
+                // Step 7: Play beep sequence: 1000 Hz for 100 ms, sleep 100 ms, 2000 Hz for 100 ms
+                Console.Beep(1000, 100);
+                System.Threading.Thread.Sleep(100);
+                Console.Beep(2000, 100);
+
+                Debug.WriteLine("EInkPlus restart completed successfully.");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error during EInkPlus restart: {ex.Message}");
+                // Play error beep if something goes wrong: 200 Hz for 1000 ms
+                Console.Beep(200, 1000);
+            }
         }
 
         /// <summary>
@@ -405,6 +499,12 @@ namespace ScreenRefreshApp
                         subItem.Font = new System.Drawing.Font(subItem.Font ?? System.Drawing.SystemFonts.MenuFont, isSelected ? System.Drawing.FontStyle.Bold : System.Drawing.FontStyle.Regular);
                     }
                 }
+                else if (item.Text == "Detect cursor movement")
+                {
+                    item.Checked = detectCursorMovement;
+                    item.Font = new System.Drawing.Font(item.Font ?? System.Drawing.SystemFonts.MenuFont, 
+                        detectCursorMovement ? System.Drawing.FontStyle.Bold : System.Drawing.FontStyle.Regular);
+                }
             }
         }
 
@@ -419,6 +519,7 @@ namespace ScreenRefreshApp
             refreshKey = System.Windows.Forms.Keys.F4;
             refreshThresholdPct = 3.0;
             firstRunMessageShown = false; // Default is false (show message)
+            detectCursorMovement = false; // Default to disabled
             
             if (System.IO.File.Exists(iniPath))
             {
@@ -436,6 +537,7 @@ namespace ScreenRefreshApp
                             case "RefreshKey": refreshKey = (System.Windows.Forms.Keys)System.Enum.Parse(typeof(System.Windows.Forms.Keys), parts[1].Trim()); break;
                             case "RefreshThresholdPct": refreshThresholdPct = double.Parse(parts[1].Trim()); break;
                             case "FirstRunMessageShown": firstRunMessageShown = bool.Parse(parts[1].Trim()); break;
+                            case "DetectCursorMovement": detectCursorMovement = bool.Parse(parts[1].Trim()); break;
                         }
                     }
                 }
@@ -457,7 +559,8 @@ namespace ScreenRefreshApp
                 $"UserInputDelayMs={userInputDelayMs}",
                 $"RefreshKey={refreshKey}",
                 $"RefreshThresholdPct={refreshThresholdPct}",
-                $"FirstRunMessageShown={firstRunMessageShown}"
+                $"FirstRunMessageShown={firstRunMessageShown}",
+                $"DetectCursorMovement={detectCursorMovement}"
             };
             System.IO.File.WriteAllLines(iniPath, settings);
         }
@@ -580,6 +683,8 @@ namespace ScreenRefreshApp
         /// </summary>
         private void CheckMouseInput()
         {
+            if (!detectCursorMovement) return; // Skip if cursor detection is disabled
+            
             var currentPosition = System.Windows.Forms.Cursor.Position;
             if (currentPosition != lastMousePosition)
             {
@@ -612,7 +717,7 @@ namespace ScreenRefreshApp
             keybd_event((byte)refreshKey, 0, 0, 0);
             System.Threading.Thread.Sleep(10);
             keybd_event((byte)refreshKey, 0, KEYEVENTF_KEYUP, 0);
-            Beep(1000, 200);
+            // Beep(1000, 200);
         }
 
         /// <summary>
