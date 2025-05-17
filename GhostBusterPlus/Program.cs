@@ -191,8 +191,8 @@ namespace ScreenRefreshApp
         {
             System.Windows.Forms.MessageBox.Show(
                 "GhostBusterPlus works by monitoring pixel changes on your screen, and automatically pressing a function key " +
-                "(e.g. F4, etc.) if the screen changes exceed a percentage threshold. To work, you must be using the latest " +
-                "version of Lenovo EInkPlus and enable the clear ghosts shortcut key in the EInkPlus settings to set the key to F4.\n\n" +
+                "(e.g. F4, etc.) if the screen changes exceed a percentage threshold. You must be using the latest " +
+                "version of Lenovo EInkPlus and enable the clear ghosts shortcut key in the EInkPlus settings (set the key to F4.)\n\n" +
                 "A note regarding privacy and security: This app does not have network connectivity, elevated privileges or recording " +
                 "features. In fact, the screen shot is never transferred into the program, but rather, all display processing is done " +
                 "in DirectX on the GPU, and only the percentage pixel change is returned to the program.",
