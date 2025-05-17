@@ -5,14 +5,16 @@ A utility to improve the eInk experience on the Lenovo ThinkBook Plus Gen 4 lapt
 
 ![logo](https://github.com/user-attachments/assets/def07e61-7fb3-45f7-be4b-e5d81a81018c)
 
-## Features (Version 0.2)
+## Features (Version 0.3)
 - Automatically activate the clear ghosts keyboard shortcut (e.g. F4), to refresh the eInk display.
   - The change detection is now done by a DirectX shader running on the GPU that stores and compares changes in the screen. If the modified pixels exceed some threshold (e.g. 3%), a refresh is queued.
+  - Version 0.3 fixed a bug whereby the DirectX context was not restarted upon a display switch, causing silent failures in change detection.
   - The screen information is never transfered into the program, but rather all screen bitmap processing occurs on the GPU in DirectX, and the program only receives the percent change. The app also has no communications or internet connectivity and does not require elevated privileges.
 - The screen refresh is delayed while the user is actively doing something, such as providing keyboard input or (optionally) moving the mouse cursor. Also, scrolling or rapidly updating screens will delay refresh in order to avoid a rapid refresh condition.
 - Many options for customizing the screen change threshold, input/screen refresh delay time, etc.
 - A menu option and hotkey for restarting the EInkApp, which tends to sometimes die or exhibit weird behavor when switching screens.
-- Ability to quickly switch between the provdied eInk (light high contrast) and Dark Windows 11 themes.
+- Ability to quickly switch between the provided eInk (light high contrast) and Dark Windows 11 themes.
+- Automatic detection of the active display (eInk or OLED) and automatic theme switching
 
 ## Installation
 First, you need to have the latest version of EInkPlus installed on your system. The latest version provides shortcut keys for various functions, such as clearing ghosts. Open the EInkApp Settings -> Display Settings -> Shortcut Key Settigns -> Edit (button). Change "Clear Eink Ghosts" to the "F4" key.
@@ -27,11 +29,11 @@ First, you need to have the latest version of EInkPlus installed on your system.
  - Drag GhostBusterPlus.exe into the Startup folder while holding down the Alt key to create a shortcut.
 
  ## To-do
- - Automatically detect whether the e-Ink screen is active and disable/enable the app and the eInk theme automatically.
+ - None planned at this time. Automatic display detection and theme switching was implemented in v0.3.
 
 ## System Requirements
 - Lenovo ThinkPad Plus Gen 4
-  - Should work with the Gen 2 with very minimal changes, if any.
+  - Should work with the Gen 2 with very minimal changes, possibly.
 - Windows 11
   - Tested on update 24H2 with eInkPlus app version 1.0.124.3
 
