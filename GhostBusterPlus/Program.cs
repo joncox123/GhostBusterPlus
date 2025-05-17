@@ -140,12 +140,15 @@ namespace ScreenRefreshApp
 
             TakeInitialScreenshot();
 
+            // Add hotkeys for theme switching
             KeyboardHook.AddHotkey(System.Windows.Forms.Keys.D | System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.Shift, () =>
             {
-                screenshotsEnabled = !screenshotsEnabled;
-                UpdateTrayMenu();
-                SaveSettings();
-                screenshotTimer.Enabled = screenshotsEnabled;
+                ToggleScreenshots(); // Updated to use the shared method
+            });
+            
+            KeyboardHook.AddHotkey(System.Windows.Forms.Keys.X | System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.Shift, () =>
+            {
+                ToggleScreenshots(); // New hotkey for toggling screenshots
             });
             
             KeyboardHook.AddHotkey(System.Windows.Forms.Keys.S | System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.Shift, () =>
@@ -225,14 +228,11 @@ namespace ScreenRefreshApp
                 screenshotPeriodMenu.DropDownItems.Add(item);
             }
 
-            // Enable/disable screenshots menu item
-            System.Windows.Forms.ToolStripMenuItem enableScreenshotsMenu = new System.Windows.Forms.ToolStripMenuItem(screenshotsEnabled ? "Enabled" : "Disabled");
+            // Enable/disable screenshots menu item - updated with hotkey in text
+            System.Windows.Forms.ToolStripMenuItem enableScreenshotsMenu = new System.Windows.Forms.ToolStripMenuItem(screenshotsEnabled ? "Enabled (Ctrl+Shift+X)" : "Disabled (Ctrl+Shift+X)");
             enableScreenshotsMenu.Click += (s, e) =>
             {
-                screenshotsEnabled = !screenshotsEnabled;
-                screenshotTimer.Enabled = screenshotsEnabled;
-                UpdateTrayMenu();
-                SaveSettings();
+                ToggleScreenshots();
             };
 
             // Refresh key sub-menu
@@ -341,6 +341,24 @@ namespace ScreenRefreshApp
         }
 
         /// <summary>
+        /// Toggles screenshot capture on/off
+        /// </summary>
+        private void ToggleScreenshots()
+        {
+            screenshotsEnabled = !screenshotsEnabled;
+            screenshotTimer.Enabled = screenshotsEnabled;
+            UpdateTrayMenu();
+            SaveSettings();
+            
+            // Display a notification
+            trayIcon.ShowBalloonTip(
+                1500,
+                "Screenshot Capture",
+                $"Screenshot capture {(screenshotsEnabled ? "enabled" : "disabled")}",
+                ToolTipIcon.Info);
+        }
+
+        /// <summary>
         /// Updates the tray menu to reflect current settings.
         /// </summary>
         private void UpdateTrayMenu()
@@ -356,9 +374,9 @@ namespace ScreenRefreshApp
                         subItem.Font = new System.Drawing.Font(subItem.Font ?? System.Drawing.SystemFonts.MenuFont, isSelected ? System.Drawing.FontStyle.Bold : System.Drawing.FontStyle.Regular);
                     }
                 }
-                else if (item.Text == "Enabled" || item.Text == "Disabled")
+                else if (item.Text.Contains("Enabled") || item.Text.Contains("Disabled"))
                 {
-                    item.Text = screenshotsEnabled ? "Enabled" : "Disabled";
+                    item.Text = screenshotsEnabled ? "Enabled (Ctrl+Shift+X)" : "Disabled (Ctrl+Shift+X)";
                 }
                 else if (item.Text == "Refresh Key")
                 {
@@ -397,7 +415,7 @@ namespace ScreenRefreshApp
         {
             screenshotsEnabled = true;
             screenshotPeriodMs = 500;
-            userInputDelayMs = 4000; // Default to 4000 ms
+            userInputDelayMs = 2000; // Default to 2000 ms
             refreshKey = System.Windows.Forms.Keys.F4;
             refreshThresholdPct = 3.0;
             firstRunMessageShown = false; // Default is false (show message)
