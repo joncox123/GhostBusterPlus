@@ -32,7 +32,7 @@ First, you need to have the latest version of EInkPlus installed on your system.
  - None planned at this time. Automatic display detection and theme switching was implemented in v0.3.
 
 ## System Requirements
-- Lenovo ThinkPad Plus Gen 4
+- Lenovo ThinkBook Plus Gen 4
   - Should work with the Gen 2 with very minimal changes, possibly.
 - Windows 11
   - Tested on update 24H2 with eInkPlus app version 1.0.124.3
@@ -45,7 +45,12 @@ This app has no internet access, communication, location or recording functional
 
 If Microsoft Edge, Windows Defender or other AV program gives you trouble, it’s probably because it’s a new app and it is not signed (requires paying $$$ to Microsoft).
 You are free to inspect the source code and compile the project in Visual Studio 2022 yourself. That said, I'm not a professional Windows developer, so I make no guarantees,
-provide no warranties or any other promises of performance or fitness. 
+provide no warranties or any other promises of performance or fitness.
+
+## Latest Version of EInkPlus
+For some reason, Lenovo is not keeping the drivers & support website up-to-date with the latest version of EInkPlus. This may be because it is supposed to automatically update itself via an OTA update. However, this often does not happen correctly, and the latest version is required for compatibility with Windows 11 24H2. As mentioned, the latest version also adds the shortcut key feature (e.g. F4), which is required for GhostBusterPlus >=0.2 to function. 
+
+Fortunately, the latest version, LenovoEinkPlus_OTA2_PRC_1.0.124.3, of EInkPlus can be found either [here](https://drive.google.com/file/d/117gDwTUzBHfVHCzwmdNqCLCmyMuzL4Ps/view?usp=sharing) or [here](https://forums.lenovo.com/t5/ThinkBook-Plus-Laptops/EInk-Plus-Driver-Reader-Note-Apps-for-ThinkBook-Plus-Gen-4-Win11-24H2-Compatible/m-p/5377868).
 
 ## License
 Copyright (c) 2025 by the author, joncox123. All rights reserved.
