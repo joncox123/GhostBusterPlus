@@ -50,7 +50,7 @@ provide no warranties or any other promises of performance or fitness.
 ## Latest Version of EInkPlus
 For some reason, Lenovo is not keeping the drivers & support website up-to-date with the latest version of EInkPlus. This may be because it is supposed to automatically update itself via an OTA update. However, this often does not happen correctly, and the latest version is required for compatibility with Windows 11 24H2. As mentioned, the latest version also adds the shortcut key feature (e.g. F4), which is required for GhostBusterPlus >=0.2 to function. 
 
-Fortunately, the latest version, LenovoEinkPlus_OTA2_PRC_1.0.124.3, of EInkPlus can be found either [here](https://drive.google.com/file/d/117gDwTUzBHfVHCzwmdNqCLCmyMuzL4Ps/view?usp=sharing) or at https://forums.lenovo.com/t5/ThinkBook-Plus-Laptops/EInk-Plus-Driver-Reader-Note-Apps-for-ThinkBook-Plus-Gen-4-Win11-24H2-Compatible/m-p/5377868
+Fortunately, the latest version, LenovoEinkPlus_OTA2_PRC_1.0.124.3, of EInkPlus can be found either [here](https://drive.google.com/file/d/117gDwTUzBHfVHCzwmdNqCLCmyMuzL4Ps/view?usp=sharing) or at forums.lenovo.com/t5/ThinkBook-Plus-Laptops/EInk-Plus-Driver-Reader-Note-Apps-for-ThinkBook-Plus-Gen-4-Win11-24H2-Compatible/m-p/5377868
 
 ## License
 Copyright (c) 2025 by the author, joncox123. All rights reserved.
