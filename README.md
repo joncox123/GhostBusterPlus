@@ -3,6 +3,8 @@ A utility to improve the eInk experience on the Lenovo ThinkBook Plus Gen 4 lapt
 
 ### NEW: The program has been completely rewritten in version 0.2 to use an entirely new approach!
 
+## There is a bug in 0.3 that causes the refresh to not activate on startup. This will be addressed soon in version 0.4
+
 ![logo](https://github.com/user-attachments/assets/def07e61-7fb3-45f7-be4b-e5d81a81018c)
 
 ## Features (Version 0.3)
