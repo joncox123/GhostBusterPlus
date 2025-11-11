@@ -1,16 +1,13 @@
 ## GhostBusterPlus
 A utility to improve the eInk experience on the Lenovo ThinkBook Plus Gen 4 laptop.
 
-### NEW: The program has been completely rewritten in version 0.2 to use an entirely new approach!
-
-## There is a bug in 0.3 that causes the refresh to not activate on startup. This will be addressed soon in version 0.4
+### NEW: Version 1.0 is nearing release and addresses the known major bugs.
 
 ![logo](https://github.com/user-attachments/assets/def07e61-7fb3-45f7-be4b-e5d81a81018c)
 
-## Features (Version 0.3)
+## Features (Version 1.0)
 - Automatically activate the clear ghosts keyboard shortcut (e.g. F4), to refresh the eInk display.
   - The change detection is now done by a DirectX shader running on the GPU that stores and compares changes in the screen. If the modified pixels exceed some threshold (e.g. 3%), a refresh is queued.
-  - Version 0.3 fixed a bug whereby the DirectX context was not restarted upon a display switch, causing silent failures in change detection.
   - The screen information is never transfered into the program, but rather all screen bitmap processing occurs on the GPU in DirectX, and the program only receives the percent change. The app also has no communications or internet connectivity and does not require elevated privileges.
 - The screen refresh is delayed while the user is actively doing something, such as providing keyboard input or (optionally) moving the mouse cursor. Also, scrolling or rapidly updating screens will delay refresh in order to avoid a rapid refresh condition.
 - Many options for customizing the screen change threshold, input/screen refresh delay time, etc.
@@ -31,7 +28,7 @@ First, you need to have the latest version of EInkPlus installed on your system.
  - Drag GhostBusterPlus.exe into the Startup folder while holding down the Alt key to create a shortcut.
 
  ## To-do
- - None planned at this time. Automatic display detection and theme switching was implemented in v0.3.
+ - None planned at this time. Automatic display detection and theme switching was implemented in v0.3. Bugs were fixed in 1.0.
 
 ## System Requirements
 - Lenovo ThinkBook Plus Gen 4
@@ -52,7 +49,10 @@ provide no warranties or any other promises of performance or fitness.
 ## Latest Version of EInkPlus
 For some reason, Lenovo is not keeping the drivers & support website up-to-date with the latest version of EInkPlus. This may be because it is supposed to automatically update itself via an OTA update. However, this often does not happen correctly, and the latest version is required for compatibility with Windows 11 24H2. As mentioned, the latest version also adds the shortcut key feature (e.g. F4), which is required for GhostBusterPlus >=0.2 to function. 
 
-Fortunately, the latest version, LenovoEinkPlus_OTA2_PRC_1.0.124.3, of EInkPlus can be found either [here](https://drive.google.com/file/d/117gDwTUzBHfVHCzwmdNqCLCmyMuzL4Ps/view?usp=sharing) or at forums.lenovo.com/t5/ThinkBook-Plus-Laptops/EInk-Plus-Driver-Reader-Note-Apps-for-ThinkBook-Plus-Gen-4-Win11-24H2-Compatible/m-p/5377868
+Fortunately, the latest version, LenovoEinkPlus_OTA2_PRC_1.0.124.3, of EInkPlus can be found at forums.lenovo.com/t5/ThinkBook-Plus-Laptops/EInk-Plus-Driver-Reader-Note-Apps-for-ThinkBook-Plus-Gen-4-Win11-24H2-Compatible/m-p/5377868
+
+## eInk Screen Switching Stoped Working?
+Sometimes after a Windows update, the automatic screen switching functionality in EInkPlusApp will stop working. In other words, if you rotate the screen or fold it down, it does not switch from OLED to eInk screens. This seems to be fixed by simply reinstalling the latest version (1.0.124.3) of EInkPlus. 
 
 ## License
 Copyright (c) 2025 by the author, joncox123. All rights reserved.
