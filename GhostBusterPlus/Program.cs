@@ -55,14 +55,15 @@
  */
 
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
-using System.Windows.Forms;
-using System.Runtime.InteropServices;
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Diagnostics;
-using System.Text;
+using System.Windows.Forms;
 
 namespace ScreenRefreshApp
 {
@@ -100,7 +101,9 @@ namespace ScreenRefreshApp
         private bool isEInkDisplayActive = false; // Is the e-Ink display the currently active one?
         private System.Windows.Forms.ToolStripMenuItem displayIndicatorMenuItem; // Menu item to show current display
         private bool autoSwitchTheme = true; // Default to true/enabled
-        
+        private readonly SemaphoreSlim themeLock = new SemaphoreSlim(1, 1);    // serialize theme changes
+        private DateTime lastThemeRequest = DateTime.MinValue;                 // last request time (UTC)
+
         // P/Invoke for simulating keyboard events
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
@@ -948,7 +951,7 @@ namespace ScreenRefreshApp
         /// Applies Windows theme and closes any opened settings windows
         /// </summary>
         /// <param name="themePath">Full path to the theme file</param>
-        private void ApplyTheme(string themePath)
+        private async void ApplyTheme(string themePath)
         {
             if (string.IsNullOrEmpty(themePath) || !File.Exists(themePath))
             {
@@ -956,96 +959,76 @@ namespace ScreenRefreshApp
                 return;
             }
 
+            // record the latest request time
+            lastThemeRequest = DateTime.UtcNow;
+            await themeLock.WaitAsync();
             try
             {
-                Logger.Log($"Applying theme: {themePath}");
-                // Process settingsProcess = null;
-                Process themeProcess = null;
+                // wait briefly in case another request just arrived
+                while ((DateTime.UtcNow - lastThemeRequest).TotalMilliseconds < 250)
+                    await Task.Delay(50);
 
-                // Method 1: Direct theme file execution (most effective)
-                themeProcess = Process.Start(new ProcessStartInfo
+                Logger.Log($"Applying theme: {themePath}");
+
+                // 1) Open the .theme file
+                Process.Start(new ProcessStartInfo
                 {
                     FileName = themePath,
                     UseShellExecute = true,
                     Verb = "open"
                 });
-                
-                // Short wait to ensure the theme file is processed
-                Thread.Sleep(800);
-                
-                // Method 2: Set registry value (for persistence)
-                Microsoft.Win32.Registry.SetValue(
-                    @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes",
-                    "CurrentTheme", 
-                    themePath,
-                    Microsoft.Win32.RegistryValueKind.String);
 
-                // Create a timer to find and close Settings windows after a delay
-                System.Windows.Forms.Timer cleanupTimer = new System.Windows.Forms.Timer();
-                cleanupTimer.Interval = 1500; // Wait 1.5 seconds
-                cleanupTimer.Tick += (s, e) =>
+                // 2) Wait until the registry reflects the change, retry once if needed
+                const string themesKey = @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes";
+                const int waitMs = 6000;
+
+                bool applied = await WaitForRegistryValueAsync(themesKey, "CurrentTheme", themePath, waitMs);
+                if (!applied)
                 {
-                    try
+                    Logger.Log("Theme change not observed. Retrying.");
+                    Process.Start(new ProcessStartInfo
                     {
-                        // Close any Settings windows
-                        foreach (Process proc in Process.GetProcessesByName("SystemSettings"))
-                        {
-                            try { proc.CloseMainWindow(); } catch { }
-                            try { proc.Kill(); } catch { }
-                            Logger.Log("Closed Settings window");
-                        }
-                        
-                        // Close any Control Panel windows - this requires finding explorer windows with specific titles
-                        foreach (Process proc in Process.GetProcessesByName("explorer"))
-                        {
-                            // Try to determine if it's a control panel window
-                            try
-                            {
-                                IntPtr hwnd = proc.MainWindowHandle;
-                                if (hwnd != IntPtr.Zero)
-                                {
-                                    const int nChars = 256;
-                                    StringBuilder windowTitle = new StringBuilder(nChars);
-                                    GetWindowText(hwnd, windowTitle, nChars);
-                                    
-                                    // If this is a control panel/personalization window
-                                    if (windowTitle.ToString().Contains("Personalization"))
-                                    {
-                                        PostMessage(hwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
-                                        Logger.Log("Closed Personalization window");
-                                    }
-                                }
-                            }
-                            catch { }
-                        }
+                        FileName = themePath,
+                        UseShellExecute = true,
+                        Verb = "open"
+                    });
+                    applied = await WaitForRegistryValueAsync(themesKey, "CurrentTheme", themePath, waitMs);
+                }
 
-                        // Notification that theme was applied
-                        trayIcon.ShowBalloonTip(
-                            2000,
-                            "Theme Applied",
-                            $"Switched to {Path.GetFileNameWithoutExtension(themePath)} theme",
-                            ToolTipIcon.Info);
+                // 3) If still not observed, set the value directly
+                if (!applied)
+                {
+                    Microsoft.Win32.Registry.SetValue(
+                        themesKey,
+                        "CurrentTheme",
+                        themePath,
+                        Microsoft.Win32.RegistryValueKind.String);
+                }
 
-                        // Dispose the timer
-                        cleanupTimer.Stop();
-                        cleanupTimer.Dispose();
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Log($"Cleanup failed: {ex.Message}");
-                    }
-                };
-                
-                // Start the cleanup timer
-                cleanupTimer.Start();
-                
+                // 4) Notify the system about the theme change
+                BroadcastSettingChange("ImmersiveColorSet");
+
+                // 5) Close Settings windows politely (no termination)
+                CloseSystemSettingsWindows();
+
+                trayIcon?.ShowBalloonTip(
+                    2000,
+                    "Theme Applied",
+                    $"Switched to {Path.GetFileNameWithoutExtension(themePath)} theme",
+                    ToolTipIcon.Info);
+
                 Logger.Log($"Applied theme: {Path.GetFileName(themePath)}");
             }
             catch (Exception ex)
             {
-                Logger.Log($"Theme application failed: {ex.Message}");
+                Logger.Log($"Theme apply failed: {ex.Message}");
+            }
+            finally
+            {
+                themeLock.Release();
             }
         }
+
 
         // P/Invoke declarations for window handling
         [DllImport("user32.dll")]
@@ -1056,6 +1039,116 @@ namespace ScreenRefreshApp
 
         // Windows message constants
         private const uint WM_CLOSE = 0x0010;
+
+        // Window enumeration and query
+        [DllImport("user32.dll")]
+        private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+        internal delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool IsWindowVisible(IntPtr hWnd);
+
+        // Broadcast a setting change to all top-level windows
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        private static extern IntPtr SendMessageTimeout(
+            IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam,
+            uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);
+
+        private const int WM_SETTINGCHANGE = 0x001A;
+        private static readonly IntPtr HWND_BROADCAST = new IntPtr(0xFFFF);
+        private const uint SMTO_ABORTIFHUNG = 0x0002;
+
+        private static void BroadcastSettingChange(string payload)
+        {
+            try
+            {
+                SendMessageTimeout(
+                    HWND_BROADCAST,
+                    WM_SETTINGCHANGE,
+                    UIntPtr.Zero,
+                    payload,
+                    SMTO_ABORTIFHUNG,
+                    2000,
+                    out _);
+            }
+            catch { }
+        }
+
+        // Wait until HKCU\...\Themes\CurrentTheme equals the expected path
+        private static async Task<bool> WaitForRegistryValueAsync(string key, string valueName, string expected, int timeoutMs)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds < timeoutMs)
+            {
+                try
+                {
+                    var current = Microsoft.Win32.Registry.GetValue(key, valueName, null) as string;
+                    if (string.Equals(current, expected, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+                catch { }
+                await Task.Delay(150);
+            }
+            return false;
+        }
+
+        // Close Settings windows gently after a theme change
+        private static void CloseSystemSettingsWindows()
+        {
+            try
+            {
+                // Wait a short moment so Settings can settle after the theme switch
+                System.Threading.Thread.Sleep(500);
+
+                var toClose = new List<IntPtr>();
+
+                // Enumerate all top-level windows and collect those that look like Settings
+                EnumWindows((hWnd, lParam) =>
+                {
+                    if (!IsWindowVisible(hWnd))
+                        return true;
+
+                    // Window class should be "ApplicationFrameWindow" on Windows 10/11 for Settings
+                    var className = new StringBuilder(256);
+                    if (GetClassName(hWnd, className, className.Capacity) == 0)
+                        return true;
+
+                    if (!className.ToString().Equals("ApplicationFrameWindow", StringComparison.Ordinal))
+                        return true;
+
+                    // Title should contain "Settings"
+                    var title = new StringBuilder(512);
+                    GetWindowText(hWnd, title, title.Capacity);
+                    if (title.Length == 0 || title.ToString().IndexOf("Settings", StringComparison.OrdinalIgnoreCase) < 0)
+                        return true;
+
+                    // Looks like a Settings frame; remember it
+                    toClose.Add(hWnd);
+                    return true;
+                }, IntPtr.Zero);
+
+                int closed = 0;
+                foreach (var h in toClose)
+                {
+                    // Politely ask it to close
+                    PostMessage(h, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+                    closed++;
+                }
+
+                if (closed > 0)
+                    Logger.Log("Closed Settings window");
+            }
+            catch
+            {
+                // Intentionally ignore; closing Settings is a best-effort action
+            }
+        }
+
+
 
         /// <summary>
         /// Detects whether the e-Ink display is currently active based on multiple indicators
