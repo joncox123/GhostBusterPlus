@@ -891,7 +891,7 @@ namespace ScreenRefreshApp
                 System.Threading.Thread.Sleep(10);
                 keybd_event((byte)refreshKey, 0, KEYEVENTF_KEYUP, 0);
                 Logger.Log($"RefreshScreen(): Sent refresh key: {refreshKey}");
-                Beep(1000, 200);
+                // Beep(1000, 200);
             }
         }
 
