@@ -5,6 +5,8 @@ using SharpDX.DXGI;
 using SharpDX.Direct3D11;
 using SharpDX.Direct3D;
 using SharpDX.D3DCompiler;
+// Add Logger alias
+using Logger = ScreenRefreshApp.Logger;
 
 namespace ScreenRefreshApp
 {
@@ -76,22 +78,22 @@ namespace ScreenRefreshApp
 
                 // Create a DirectX device with the debug layer enabled to help catch errors
                 // BgraSupport is needed for desktop duplication which uses BGRA format
+                // NOTE: Debug flag removed - can cause issues on production systems
                 d3dDevice = new SharpDX.Direct3D11.Device(adapter,
-                    SharpDX.Direct3D11.DeviceCreationFlags.Debug |
                     SharpDX.Direct3D11.DeviceCreationFlags.BgraSupport);
-                System.Console.WriteLine("DirectX device created with debug layer enabled.");
-                System.Console.WriteLine($"Device feature level: {d3dDevice.FeatureLevel}");
+                Logger.Log("DirectX device created successfully");
+                Logger.Log($"Device feature level: {d3dDevice.FeatureLevel}");
 
                 // Get the primary monitor output and set up desktop duplication
                 output = adapter.GetOutput(0);
                 var output1 = output.QueryInterface<SharpDX.DXGI.Output1>();
                 outputDuplication = output1.DuplicateOutput(d3dDevice);
-                System.Console.WriteLine("Output duplication initialized.");
+                Logger.Log("Output duplication initialized.");
 
                 // Get the desktop dimensions to create appropriately sized textures
                 int width = output.Description.DesktopBounds.Right - output.Description.DesktopBounds.Left;
                 int height = output.Description.DesktopBounds.Bottom - output.Description.DesktopBounds.Top;
-                System.Console.WriteLine($"Texture dimensions: Width={width}, Height={height}");
+                Logger.Log($"Texture dimensions: Width={width}, Height={height}");
 
                 // Create texture description for grayscale images
                 // Using R32_Float format for single-channel grayscale values (32-bit float per pixel)
@@ -142,7 +144,7 @@ namespace ScreenRefreshApp
                         Dimension = SharpDX.Direct3D11.UnorderedAccessViewDimension.Texture2D,
                         Texture2D = { MipSlice = 0 }
                     });
-                System.Console.WriteLine("Grayscale textures and views created.");
+                Logger.Log("Grayscale textures and views created.");
 
                 // Create buffer for storing pixel difference count in the comparison shader
                 // The result buffer is a structured buffer that will contain one integer count
@@ -170,7 +172,7 @@ namespace ScreenRefreshApp
                 };
                 resultStagingBuffer = new SharpDX.Direct3D11.Buffer(d3dDevice, resultStagingDesc);
                 resultUAV = new SharpDX.Direct3D11.UnorderedAccessView(d3dDevice, resultBuffer);
-                System.Console.WriteLine("Result buffers and UAV created.");
+                Logger.Log("Result buffers and UAV created.");
 
                 // Define HLSL shader for grayscale conversion
                 // This shader takes a color texture (RGBA) and outputs a single-channel grayscale texture
@@ -268,7 +270,7 @@ namespace ScreenRefreshApp
                         // Create compute shader objects from the compiled bytecode
                         grayscaleComputeShader = new SharpDX.Direct3D11.ComputeShader(d3dDevice, grayscaleBytecode.Bytecode);
                         compareComputeShader = new SharpDX.Direct3D11.ComputeShader(d3dDevice, compareBytecode.Bytecode);
-                        System.Console.WriteLine("Compute shaders compiled successfully.");
+                        Logger.Log("Compute shaders compiled successfully.");
                     }
                     else
                     {
@@ -282,7 +284,7 @@ namespace ScreenRefreshApp
             }
             catch (System.Exception ex)
             {
-                System.Console.WriteLine($"DirectX initialization failed: {ex.Message}");
+                Logger.Log($"DirectX initialization failed: {ex.Message}");
             }
         }
 
@@ -293,104 +295,82 @@ namespace ScreenRefreshApp
         /// <returns>True if significant screen change is detected, otherwise false.</returns>
         public bool ProcessScreenshotOnGPU()
         {
-            //System.Console.WriteLine($"Screenshot taken at {System.DateTime.Now:HH:mm:ss.fff}");
             SharpDX.DXGI.Resource desktopResource = null;
             SharpDX.DXGI.OutputDuplicateFrameInformation frameInfo;
-            bool frameAcquired = false;
 
             try
             {
-                // Attempt to acquire the next desktop frame with retries
-                // Frame acquisition can fail if there have been no updates or if the desktop is locked
-                int retryCount = 0;
-                const int maxRetries = 3;
-                while (retryCount < maxRetries && !frameAcquired)
+                // Single attempt to acquire frame
+                try
                 {
-                    try
-                    {
-                        // AcquireNextFrame waits for up to 500ms for a new frame
-                        outputDuplication.AcquireNextFrame(500, out frameInfo, out desktopResource);
-                        frameAcquired = true;
-                    }
-                    catch (SharpDX.SharpDXException ex) when (ex.HResult == unchecked((int)0x887A0001))
-                    {
-                        // 0x887A0001 = DXGI_ERROR_WAIT_TIMEOUT - No new frame available yet
-                        System.Console.WriteLine($"AcquireNextFrame failed (attempt {retryCount + 1}/{maxRetries}): {ex.Message}");
-                        retryCount++;
-                        if (retryCount == maxRetries)
-                        {
-                            throw new System.Exception("Failed to acquire frame after retries", ex);
-                        }
-                        System.Threading.Thread.Sleep(100);
-                    }
+                    // AcquireNextFrame waits for up to 100ms for a new frame
+                    outputDuplication.AcquireNextFrame(100, out frameInfo, out desktopResource);
+                }
+                catch (SharpDX.SharpDXException ex) when (ex.HResult == unchecked((int)0x887A0027))
+                {
+                    // DXGI_ERROR_WAIT_TIMEOUT - No new frame available
+                    // This is normal when screen hasn't changed
+                    return false;
                 }
 
-                if (!frameAcquired)
-                {
-                    throw new System.Exception("Unable to acquire frame after retries.");
-                }
-
-                // Convert the desktop resource to a texture we can work with
+                // Process the frame
                 using (var capturedTexture = desktopResource.QueryInterface<SharpDX.Direct3D11.Texture2D>())
                 {
-                    // Verify dimensions match our output textures
+                    // Verify dimensions
                     if (capturedTexture.Description.Width != currentGrayscaleTexture.Description.Width ||
                         capturedTexture.Description.Height != currentGrayscaleTexture.Description.Height)
                     {
-                        System.Console.WriteLine($"Captured texture dimensions mismatch: Expected {currentGrayscaleTexture.Description.Width}x{currentGrayscaleTexture.Description.Height}, Got {capturedTexture.Description.Width}x{capturedTexture.Description.Height}");
-                        return false;
+                        Logger.Log($"Texture dimensions mismatch - reinit needed");
+                        throw new InvalidOperationException("Texture dimensions mismatch - reinit needed");
                     }
 
-                    // Convert the color desktop image to grayscale using our compute shader
                     ConvertToGrayscaleGPU(capturedTexture);
 
                     bool significantChange = false;
                     if (previousGrayscaleTexture != null)
                     {
-                        // Compare the current grayscale image with the previous one
                         int diffCount = CompareScreenshotsGPU();
                         int totalPixels = currentGrayscaleTexture.Description.Width * currentGrayscaleTexture.Description.Height;
                         double diffPercentage = (double)diffCount / totalPixels * 100.0;
-                        //System.Console.WriteLine($"CompareScreenshotsGPU ran at {System.DateTime.Now:HH:mm:ss.fff}, DiffCount: {diffCount}, Total Pixels: {totalPixels}, Percentage: {diffPercentage:F2}%");
 
-                        // Compare against the configurable threshold
                         significantChange = diffPercentage >= pixelThresholdPct;
-                    }
-                    else
-                    {
-                        System.Console.WriteLine("Previous grayscale texture not available, skipping comparison.");
+
+                        if (significantChange)
+                        {
+                            Logger.Log($"Significant change detected: {diffPercentage:F2}% pixels changed");
+                        }
                     }
 
-                    // Save the current frame as the previous frame for the next comparison
+                    // Save current as previous
                     d3dDevice.ImmediateContext.CopyResource(currentGrayscaleTexture, previousGrayscaleTexture);
 
                     return significantChange;
                 }
             }
+            catch (SharpDX.SharpDXException ex) when
+                (ex.ResultCode.Code == SharpDX.DXGI.ResultCode.DeviceRemoved.Code ||
+                 ex.ResultCode.Code == SharpDX.DXGI.ResultCode.DeviceReset.Code ||
+                 ex.ResultCode.Code == SharpDX.DXGI.ResultCode.AccessLost.Code)
+            {
+                // Let the caller handle re-init paths
+                throw;
+            }
             catch (System.Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Screenshot processing failed: {ex.Message}");
-                System.Console.WriteLine($"Screenshot processing failed: {ex.Message}");
+                Logger.Log($"Screenshot processing error: {ex.Message}");
                 return false;
             }
+
             finally
             {
-                // Always release the frame and dispose resources, even if an exception occurred
-                if (frameAcquired)
+                // Always release the frame
+                try
                 {
-                    try
-                    {
+                    if (desktopResource != null)
                         outputDuplication.ReleaseFrame();
-                    }
-                    catch (System.Exception ex)
-                    {
-                        System.Console.WriteLine($"Failed to release frame: {ex.Message}");
-                    }
                 }
-                else
-                {
-                    System.Console.WriteLine("Frame not acquired, skipping release.");
-                }
+                catch { }
+
                 desktopResource?.Dispose();
             }
         }
@@ -405,7 +385,7 @@ namespace ScreenRefreshApp
             // Verify the input texture is in the expected format (BGRA)
             if (inputTexture.Description.Format != SharpDX.DXGI.Format.B8G8R8A8_UNorm)
             {
-                System.Console.WriteLine($"Invalid input texture format: Expected B8G8R8A8_UNorm, Got {inputTexture.Description.Format}");
+                Logger.Log($"Invalid input texture format: Expected B8G8R8A8_UNorm, Got {inputTexture.Description.Format}");
                 throw new System.InvalidOperationException("Input texture format must be B8G8R8A8_UNorm.");
             }
 
@@ -477,7 +457,7 @@ namespace ScreenRefreshApp
             }
             catch (SharpDX.SharpDXException ex)
             {
-                System.Console.WriteLine($"Compute shader setup failed: {ex.Message}");
+                Logger.Log($"Compute shader setup failed: {ex.Message}");
                 throw;
             }
             finally
@@ -577,19 +557,22 @@ namespace ScreenRefreshApp
         {
             try
             {
-                System.Console.WriteLine("Reinitializing DirectX resources for display change...");
-                
-                // First dispose existing resources
+                Logger.Log("Reinitializing DirectX for display change");
+
+                // Dispose existing resources
                 DisposeDirectXResources();
-                
-                // Then initialize fresh resources for the new display
+
+                // Wait briefly for cleanup
+                System.Threading.Thread.Sleep(500);
+
+                // Initialize fresh resources
                 InitializeDirectX();
-                
-                System.Console.WriteLine("DirectX resources successfully reinitialized.");
+
+                Logger.Log("DirectX reinitialized successfully");
             }
             catch (Exception ex)
             {
-                System.Console.WriteLine($"Failed to reinitialize DirectX resources: {ex.Message}");
+                Logger.Log($"Failed to reinitialize DirectX: {ex.Message}");
                 throw;
             }
         }
@@ -643,11 +626,11 @@ namespace ScreenRefreshApp
                 d3dDevice?.Dispose();
                 d3dDevice = null;
                 
-                System.Console.WriteLine("DirectX resources successfully disposed");
+                Logger.Log("DirectX resources successfully disposed");
             }
             catch (Exception ex)
             {
-                System.Console.WriteLine($"Error during DirectX resource disposal: {ex.Message}");
+                Logger.Log($"Error during DirectX resource disposal: {ex.Message}");
             }
         }
 

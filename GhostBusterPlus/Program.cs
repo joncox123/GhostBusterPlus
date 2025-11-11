@@ -121,14 +121,31 @@ namespace ScreenRefreshApp
         /// </summary>
         public ScreenRefreshApp()
         {
+            // Initialize logger first
+            Logger.Initialize();
+            Logger.Log("ScreenRefreshApp(): GhostBusterPlus constructor started");
+
             this.Visible = false;
             this.ShowInTaskbar = false;
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedToolWindow;
             this.Size = new System.Drawing.Size(0, 0);
 
-            screenshotProcessor = new Processor();
+            try
+            {
+                Logger.Log("Creating screenshot processor");
+                screenshotProcessor = new Processor();
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"Failed to create screenshot processor: {ex.Message}");
+                throw;
+            }
+
+            Logger.Log("Initializing tray icon");
             InitializeTrayIcon();
+            Logger.Log("Loading settings");
             LoadSettings();
+
             lastScreenChangeTime = System.Environment.TickCount; // Initialize to now
             
             // Initialize theme paths - MUST happen regardless of first run status
@@ -140,16 +157,30 @@ namespace ScreenRefreshApp
                 CopyThemeFiles();
                 ShowFirstRunMessage();
             }
-            
-            UpdateTrayMenu();
-            UpdateActiveDisplay(forceCheck:true);
+
+            // Initialize timers and hooks first
             InitializeTimers();
             InitializeInputHooks();
+
+            // Now do an initial detection (safe because screenshotTimer exists)
+            UpdateActiveDisplay(forceCheck: true);
+
 
             // Add a message filter to catch mouse wheel events at the application level
             Application.AddMessageFilter(new GlobalMouseWheelMessageFilter(() => lastButtonInputTime = Environment.TickCount));
 
-            TakeInitialScreenshot();
+            // Delay initial screenshot to ensure DirectX is ready
+            System.Windows.Forms.Timer initTimer = new System.Windows.Forms.Timer();
+            initTimer.Interval = 1000; // Wait 1 second
+            initTimer.Tick += (s, e) =>
+            {
+                initTimer.Stop();
+                initTimer.Dispose();
+                Logger.Log("Taking delayed initial screenshot");
+                TakeInitialScreenshot();
+            };
+            initTimer.Start();
+            Logger.Log("Scheduled initial screenshot");
 
             // Add hotkeys for theme switching
             KeyboardHook.AddHotkey(System.Windows.Forms.Keys.D | System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.Shift, () => 
@@ -184,14 +215,14 @@ namespace ScreenRefreshApp
             
             // Verify theme files exist
             if (!File.Exists(eInkThemePath))
-                System.Console.WriteLine($"Warning: eInk theme file not found at {eInkThemePath}");
+                Logger.Log($"Warning: eInk theme file not found at {eInkThemePath}");
             else
-                System.Console.WriteLine($"eInk theme file found at {eInkThemePath}");
+                Logger.Log($"eInk theme file found at {eInkThemePath}");
                 
             if (!File.Exists(darkThemePath))
-                System.Console.WriteLine($"Warning: Dark theme file not found at {darkThemePath}");
+                Logger.Log($"Warning: Dark theme file not found at {darkThemePath}");
             else
-                System.Console.WriteLine($"Dark theme file found at {darkThemePath}");
+                Logger.Log($"Dark theme file found at {darkThemePath}");
         }
 
         /// <summary>
@@ -344,7 +375,7 @@ namespace ScreenRefreshApp
             aboutMenu.Click += (s, e) =>
             {
                 System.Windows.Forms.MessageBox.Show(
-                    "GhostBusterPlus v0.3, by joncox123. Enhancing your Lenovo ThinkBook Plus Gen 4 experience. " +
+                    "GhostBusterPlus v1.0, by joncox123. Enhancing your Lenovo ThinkBook Plus Gen 4 experience. " +
                     "Copyright (c) 2025, all rights reserved. No warranty or suitability for any purpose is implied or provided.",
                     "About GhostBusterPlus",
                     System.Windows.Forms.MessageBoxButtons.OK,
@@ -386,7 +417,7 @@ namespace ScreenRefreshApp
 
         private static void RestartEInkPlus(object sender, EventArgs e)
         {
-            Debug.WriteLine("Restarting EInkPlus processes...");
+            Logger.Log("Restarting EInkPlus processes...");
 
             try
             {
@@ -398,36 +429,36 @@ namespace ScreenRefreshApp
 
                 foreach (Process process in launcherProcesses)
                 {
-                    Debug.WriteLine($"Killing process LenovoGen4.Launcher (PID: {process.Id})...");
+                    Logger.Log($"Killing process LenovoGen4.Launcher (PID: {process.Id})...");
                     process.Kill();
                     process.WaitForExit(5000); // Wait up to 5 seconds for the process to exit
-                    Debug.WriteLine($"Process LenovoGen4.Launcher (PID: {process.Id}) terminated.");
+                    Logger.Log($"Process LenovoGen4.Launcher (PID: {process.Id}) terminated.");
                 }
 
                 foreach (Process process in flyoutProcesses)
                 {
-                    Debug.WriteLine($"Killing process LenovoGen4.FlyoutButton (PID: {process.Id})...");
+                    Logger.Log($"Killing process LenovoGen4.FlyoutButton (PID: {process.Id})...");
                     process.Kill();
                     process.WaitForExit(5000); // Wait up to 5 seconds for the process to exit
-                    Debug.WriteLine($"Process LenovoGen4.FlyoutButton (PID: {process.Id}) terminated.");
+                    Logger.Log($"Process LenovoGen4.FlyoutButton (PID: {process.Id}) terminated.");
                 }
 
                 // Step 3: Wait until both processes are no longer running
                 while (Process.GetProcessesByName("LenovoGen4.Launcher").Length > 0 ||
                        Process.GetProcessesByName("LenovoGen4.FlyoutButton").Length > 0)
                 {
-                    Debug.WriteLine("Waiting for LenovoGen4 processes to terminate...");
+                    Logger.Log("Waiting for LenovoGen4 processes to terminate...");
                     System.Threading.Thread.Sleep(100);
                 }
-                Debug.WriteLine("All LenovoGen4 processes have terminated.");
+                Logger.Log("All LenovoGen4 processes have terminated.");
 
                 // Step 4: Add a brief delay of 1000 ms
                 System.Threading.Thread.Sleep(1000);
-                Debug.WriteLine("Waited 1000 ms after process termination.");
+                Logger.Log("Waited 1000 ms after process termination.");
 
                 // Step 5: Restart LenovoGen4.Launcher.exe with proper working directory and window style
                 string launcherPath = @"C:\Program Files\Lenovo\ThinkBookEinkPlus\LenovoGen4.Launcher.exe";
-                Debug.WriteLine($"Starting LenovoGen4.Launcher from {launcherPath}...");
+                Logger.Log($"Starting LenovoGen4.Launcher from {launcherPath}...");
 
                 ProcessStartInfo startInfo = new ProcessStartInfo
                 {
@@ -441,21 +472,21 @@ namespace ScreenRefreshApp
                 // Step 6: Wait until LenovoGen4.Launcher is running again
                 while (Process.GetProcessesByName("LenovoGen4.Launcher").Length == 0)
                 {
-                    Debug.WriteLine("Waiting for LenovoGen4.Launcher to restart...");
+                    Logger.Log("Waiting for LenovoGen4.Launcher to restart...");
                     System.Threading.Thread.Sleep(100);
                 }
-                Debug.WriteLine("LenovoGen4.Launcher has restarted.");
+                Logger.Log("LenovoGen4.Launcher has restarted.");
 
                 // Step 7: Play beep sequence: 1000 Hz for 100 ms, sleep 100 ms, 2000 Hz for 100 ms
                 Console.Beep(1000, 100);
                 System.Threading.Thread.Sleep(100);
                 Console.Beep(2000, 100);
 
-                Debug.WriteLine("EInkPlus restart completed successfully.");
+                Logger.Log("EInkPlus restart completed successfully.");
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error during EInkPlus restart: {ex.Message}");
+                Logger.Log($"Error during EInkPlus restart: {ex.Message}");
                 // Play error beep if something goes wrong: 200 Hz for 1000 ms
                 Console.Beep(200, 1000);
             }
@@ -609,64 +640,51 @@ namespace ScreenRefreshApp
             bool previousIsEInk = isEInkDisplayActive;
             isEInkDisplayActive = DetectEInkDisplayActive();
 
+            // Always update the indicator text
+            displayIndicatorMenuItem.Text = isEInkDisplayActive ? "Active Display: eInk" : "Active Display: OLED";
+
             // Update UI if the active display changed
-            if (previousIsEInk != isEInkDisplayActive || forceCheck)
+            // Handle DirectX reinitialization for display change
+            if (previousIsEInk != isEInkDisplayActive)
             {
-                displayIndicatorMenuItem.Text = $"Active Display: {(isEInkDisplayActive ? "eInk" : "Main LCD")}";
-                displayIndicatorMenuItem.ForeColor = isEInkDisplayActive ? Color.DarkGreen : Color.Blue;
-                Debug.WriteLine($"Active display changed to: {(isEInkDisplayActive ? "eInk" : "Main LCD")}");
-                
-                // Handle DirectX reinitialization for display change
                 try
                 {
+                    if (screenshotTimer == null)
+                    {
+                        // We are still starting up. Just update the indicator and return.
+                        displayIndicatorMenuItem.Text = isEInkDisplayActive ? "Active Display: eInk" : "Active Display: OLED";
+                        return;
+                    }
+
+                    // Temporarily disable screenshots during reinit
+                    bool wasEnabled = screenshotTimer.Enabled;
+                    screenshotTimer.Enabled = false;
+
                     // Reinitialize the DirectX resources
                     screenshotProcessor.ReinitializeForDisplayChange();
-                    
+
+                    // Auto-switch theme on change if enabled
+                    if (autoSwitchTheme)
+                    {
+                        ApplyTheme(isEInkDisplayActive ? eInkThemePath : darkThemePath);
+                    }
+
                     // Reset the screen change state
                     doRefresh = false;
                     lastScreenChangeTime = Environment.TickCount;
-                    
-                    // Take a fresh initial screenshot with the new display context
-                    TakeInitialScreenshot();
-                    
-                    Debug.WriteLine("Screenshot processor successfully reinitialized for new display");
+
+                    // Re-enable screenshots if they were enabled
+                    if (wasEnabled && screenshotsEnabled)
+                    {
+                        screenshotTimer.Enabled = true;
+                    }
+
+                    Logger.Log("Screenshot processor reinitialized for display change");
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"Failed to reinitialize for display change: {ex.Message}");
-                    
-                    // If reinitialization fails, temporarily disable screenshots until next check
-                    if (screenshotsEnabled)
-                    {
-                        screenshotTimer.Enabled = false;
-                        System.Threading.Timer restartTimer = null;
-                        restartTimer = new System.Threading.Timer((state) =>
-                        {
-                            try
-                            {
-                                if (screenshotsEnabled)
-                                {
-                                    screenshotTimer.Enabled = true;
-                                    Debug.WriteLine("Screenshot timer re-enabled after display change");
-                                }
-                                restartTimer?.Dispose();
-                            }
-                            catch { }
-                        }, null, 3000, Timeout.Infinite);
-                    }
-                }
-                
-                // Auto-switch theme if enabled and display has changed
-                if (autoSwitchTheme && (previousIsEInk != isEInkDisplayActive || forceCheck))
-                {
-                    if (isEInkDisplayActive)
-                    {
-                        ApplyTheme(eInkThemePath);
-                    }
-                    else
-                    {
-                        ApplyTheme(darkThemePath);
-                    }
+                    Logger.Log($"Failed to reinitialize for display change: {ex.Message}");
+                    // Don't try to recover automatically - user can restart if needed
                 }
             }
         }
@@ -698,6 +716,8 @@ namespace ScreenRefreshApp
         /// </summary>
         private void Shutdown()
         {
+            Logger.Log("Shutdown(): Shutting down GhostBusterPlus");
+
             // Signal cancellation to stop async tasks
             cancellationTokenSource.Cancel();
 
@@ -730,6 +750,9 @@ namespace ScreenRefreshApp
             displayCheckTimer?.Dispose();
             screenshotProcessor?.Dispose();
 
+            Logger.Log("Shutdown(): Shutdown complete");
+            Logger.Close();
+
             System.Windows.Forms.Application.Exit();
             System.Environment.Exit(0);
         }
@@ -746,14 +769,14 @@ namespace ScreenRefreshApp
             {
                 // Explicitly check for wheel events as well as button presses
                 lastButtonInputTime = System.Environment.TickCount;
-                // System.Console.WriteLine($"Mouse input: Button={e.Button}, Delta={e.Delta}, X={e.X}, Y={e.Y}");
+                // Logger.Log($"Mouse input: Button={e.Button}, Delta={e.Delta}, X={e.X}, Y={e.Y}");
             };
 
             // Add application-level message handling for touchpad gestures
             Application.AddMessageFilter(new GlobalMouseWheelMessageFilter(() =>
             {
                 lastButtonInputTime = System.Environment.TickCount;
-                System.Console.WriteLine("Mouse wheel message detected through message filter");
+                Logger.Log("Mouse wheel message detected through message filter");
             }));
         }
 
@@ -762,17 +785,23 @@ namespace ScreenRefreshApp
         /// </summary>
         private void TakeInitialScreenshot()
         {
-            if (screenshotsEnabled)
+            if (screenshotsEnabled && isEInkDisplayActive)
             {
                 try
                 {
-                    screenshotProcessor.ProcessScreenshotOnGPU();
-                    Debug.WriteLine("Initial screenshot captured successfully");
+                    Logger.Log("TakeInitialScreenshot(): Taking initial screenshot");
+                    bool result = screenshotProcessor.ProcessScreenshotOnGPU();
+                    Logger.Log($"TakeInitialScreenshot(): Initial screenshot completed, result: {result}");
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"Failed to capture initial screenshot: {ex.Message}");
+                    Logger.Log($"TakeInitialScreenshot(): Failed to capture initial screenshot: {ex.Message}");
+                    // Don't throw - let the app continue
                 }
+            }
+            else
+            {
+                Logger.Log($"TakeInitialScreenshot(): Skipping initial screenshot - screenshots enabled: {screenshotsEnabled}, eInk active: {isEInkDisplayActive}");
             }
         }
 
@@ -785,44 +814,36 @@ namespace ScreenRefreshApp
 
             try
             {
-                bool significantChange = await System.Threading.Tasks.Task.Run(() => screenshotProcessor.ProcessScreenshotOnGPU(), cancellationTokenSource.Token);
+                bool significantChange = await System.Threading.Tasks.Task.Run(
+                    () => screenshotProcessor.ProcessScreenshotOnGPU(),
+                    cancellationTokenSource.Token);
+
                 if (significantChange)
                 {
                     doRefresh = true;
-                    lastScreenChangeTime = System.Environment.TickCount; // Record when the change was detected
+                    lastScreenChangeTime = System.Environment.TickCount;
                 }
             }
             catch (System.Threading.Tasks.TaskCanceledException)
             {
-                System.Diagnostics.Debug.WriteLine("Screenshot capture task was cancelled during shutdown.");
+                Logger.Log("Screenshot capture cancelled during shutdown");
             }
-            catch (SharpDX.SharpDXException ex) when 
-                (ex.ResultCode.Code == SharpDX.DXGI.ResultCode.DeviceRemoved.Code || 
-                 ex.ResultCode.Code == SharpDX.DXGI.ResultCode.DeviceReset.Code || 
+            catch (SharpDX.SharpDXException ex) when
+                (ex.ResultCode.Code == SharpDX.DXGI.ResultCode.DeviceRemoved.Code ||
+                 ex.ResultCode.Code == SharpDX.DXGI.ResultCode.DeviceReset.Code ||
                  ex.ResultCode.Code == SharpDX.DXGI.ResultCode.AccessLost.Code)
             {
-                Debug.WriteLine($"DirectX device lost access during screenshot capture: {ex.Message}");
-                
-                // Schedule a DirectX reinitialization
-                System.Threading.Timer reinitTimer = null;
-                reinitTimer = new System.Threading.Timer((state) =>
-                {
-                    try
-                    {
-                        // Force a display check which will trigger reinitialization
-                        UpdateActiveDisplay(forceCheck: true);
-                        reinitTimer?.Dispose();
-                    }
-                    catch (Exception reinitEx)
-                    {
-                        Debug.WriteLine($"Failed to reinitialize after access loss: {reinitEx.Message}");
-                    }
-                }, null, 1000, Timeout.Infinite);
+                Logger.Log($"DirectX device lost: {ex.Message}");
+                // The display check timer will handle reinitialization
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("Texture dimensions mismatch"))
+            {
+                Logger.Log("Texture dimensions changed. Reinitializing DirectX.");
+                screenshotProcessor.ReinitializeForDisplayChange();
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Screenshot processing failed with unexpected error: {ex.Message}");
-                // For unexpected errors, let the process continue but log the error
+                Logger.Log($"Screenshot processing error: {ex.Message}");
             }
         }
 
@@ -866,7 +887,8 @@ namespace ScreenRefreshApp
                 keybd_event((byte)refreshKey, 0, 0, 0);
                 System.Threading.Thread.Sleep(10);
                 keybd_event((byte)refreshKey, 0, KEYEVENTF_KEYUP, 0);
-                // Beep(1000, 200);
+                Logger.Log($"RefreshScreen(): Sent refresh key: {refreshKey}");
+                Beep(1000, 200);
             }
         }
 
@@ -894,11 +916,11 @@ namespace ScreenRefreshApp
 
                     // Set appropriate file attributes
                     File.SetAttributes(eInkThemePath, FileAttributes.Normal);
-                    System.Console.WriteLine($"Copied {sourceEInkPath} to {eInkThemePath}");
+                    Logger.Log($"Copied {sourceEInkPath} to {eInkThemePath}");
                 }
                 else
                 {
-                    System.Console.WriteLine($"Source file not found: {sourceEInkPath}");
+                    Logger.Log($"Source file not found: {sourceEInkPath}");
                 }
 
                 if (File.Exists(sourceDarkPath))
@@ -907,18 +929,18 @@ namespace ScreenRefreshApp
 
                     // Set appropriate file attributes
                     File.SetAttributes(darkThemePath, FileAttributes.Normal);
-                    System.Console.WriteLine($"Copied {sourceDarkPath} to {darkThemePath}");
+                    Logger.Log($"Copied {sourceDarkPath} to {darkThemePath}");
                 }
                 else
                 {
-                    System.Console.WriteLine($"Source file not found: {sourceDarkPath}");
+                    Logger.Log($"Source file not found: {sourceDarkPath}");
                 }
 
-                System.Console.WriteLine($"Theme files copied to {userThemesPath}");
+                Logger.Log($"Theme files copied to {userThemesPath}");
             }
             catch (Exception ex)
             {
-                System.Console.WriteLine($"Failed to copy theme files: {ex.Message}");
+                Logger.Log($"Failed to copy theme files: {ex.Message}");
             }
         }
 
@@ -930,13 +952,13 @@ namespace ScreenRefreshApp
         {
             if (string.IsNullOrEmpty(themePath) || !File.Exists(themePath))
             {
-                System.Console.WriteLine($"Theme file not found: {themePath}");
+                Logger.Log($"Theme file not found: {themePath}");
                 return;
             }
 
             try
             {
-                System.Console.WriteLine($"Applying theme: {themePath}");
+                Logger.Log($"Applying theme: {themePath}");
                 // Process settingsProcess = null;
                 Process themeProcess = null;
 
@@ -970,7 +992,7 @@ namespace ScreenRefreshApp
                         {
                             try { proc.CloseMainWindow(); } catch { }
                             try { proc.Kill(); } catch { }
-                            System.Console.WriteLine("Closed Settings window");
+                            Logger.Log("Closed Settings window");
                         }
                         
                         // Close any Control Panel windows - this requires finding explorer windows with specific titles
@@ -990,7 +1012,7 @@ namespace ScreenRefreshApp
                                     if (windowTitle.ToString().Contains("Personalization"))
                                     {
                                         PostMessage(hwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
-                                        System.Console.WriteLine("Closed Personalization window");
+                                        Logger.Log("Closed Personalization window");
                                     }
                                 }
                             }
@@ -1010,18 +1032,18 @@ namespace ScreenRefreshApp
                     }
                     catch (Exception ex)
                     {
-                        System.Console.WriteLine($"Cleanup failed: {ex.Message}");
+                        Logger.Log($"Cleanup failed: {ex.Message}");
                     }
                 };
                 
                 // Start the cleanup timer
                 cleanupTimer.Start();
                 
-                System.Console.WriteLine($"Applied theme: {Path.GetFileName(themePath)}");
+                Logger.Log($"Applied theme: {Path.GetFileName(themePath)}");
             }
             catch (Exception ex)
             {
-                System.Console.WriteLine($"Theme application failed: {ex.Message}");
+                Logger.Log($"Theme application failed: {ex.Message}");
             }
         }
 
@@ -1065,7 +1087,7 @@ namespace ScreenRefreshApp
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"Error checking display settings: {ex.Message}");
+                        Logger.Log($"Error checking display settings: {ex.Message}");
                     }
                 }
                 
@@ -1095,7 +1117,7 @@ namespace ScreenRefreshApp
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Exception in DetectEInkDisplayActive: {ex.Message}");
+                Logger.Log($"Exception in DetectEInkDisplayActive: {ex.Message}");
                 return false; // Default to main LCD on error
             }
         }
