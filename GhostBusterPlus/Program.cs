@@ -378,7 +378,7 @@ namespace ScreenRefreshApp
             aboutMenu.Click += (s, e) =>
             {
                 System.Windows.Forms.MessageBox.Show(
-                    "GhostBusterPlus v1.0, by joncox123. Enhancing your Lenovo ThinkBook Plus Gen 4 experience. " +
+                    "GhostBusterPlus v1.0.1, by joncox123. Enhancing your Lenovo ThinkBook Plus Gen 4 experience. " +
                     "Copyright (c) 2025, all rights reserved. No warranty or suitability for any purpose is implied or provided.",
                     "About GhostBusterPlus",
                     System.Windows.Forms.MessageBoxButtons.OK,
@@ -837,7 +837,25 @@ namespace ScreenRefreshApp
                  ex.ResultCode.Code == SharpDX.DXGI.ResultCode.AccessLost.Code)
             {
                 Logger.Log($"DirectX device lost: {ex.Message}");
-                // The display check timer will handle reinitialization
+                try
+                {
+                    // pause screenshots during reinit
+                    var wasEnabled = screenshotTimer.Enabled;
+                    screenshotTimer.Enabled = false;
+
+                    // rebind duplication to the active output
+                    screenshotProcessor.ReinitializeForDisplayChange();
+
+                    // resume if previously enabled
+                    if (wasEnabled && screenshotsEnabled) screenshotTimer.Enabled = true;
+
+                    Logger.Log("DirectX reinitialized after device loss");
+                }
+                catch (Exception rex)
+                {
+                    Logger.Log($"Reinit after device loss failed: {rex.Message}");
+                }
+                return; // exit this tick
             }
             catch (InvalidOperationException ex) when (ex.Message.Contains("Texture dimensions mismatch"))
             {
