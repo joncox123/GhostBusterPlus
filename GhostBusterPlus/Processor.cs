@@ -249,7 +249,7 @@ namespace ScreenRefreshApp
                             // Calculate the absolute difference
                             float diff = abs(oldPixel - newPixel);
                             
-                            // If the difference exceeds our threshold (0.05 ≈ 5% brightness change)
+                            // If the difference exceeds our threshold (0.05 is approximately 5% brightness change)
                             // count this pixel as changed
                             if (diff > 0.05)
                             {
