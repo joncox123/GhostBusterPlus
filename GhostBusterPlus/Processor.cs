@@ -73,19 +73,46 @@ namespace ScreenRefreshApp
                 // Create a DXGI factory - the entry point for DirectX Graphics Infrastructure
                 dxgiFactory = new SharpDX.DXGI.Factory1();
 
-                // Get the primary graphics adapter (typically the dedicated GPU)
-                adapter = dxgiFactory.GetAdapter1(0);
+                // Pick the DXGI output that contains the current cursor (active desktop)
+                var cursor = System.Windows.Forms.Cursor.Position;
+                SharpDX.DXGI.Adapter chosenAdapter = null;
+                SharpDX.DXGI.Output chosenOutput = null;
 
-                // Create a DirectX device with the debug layer enabled to help catch errors
-                // BgraSupport is needed for desktop duplication which uses BGRA format
-                // NOTE: Debug flag removed - can cause issues on production systems
-                d3dDevice = new SharpDX.Direct3D11.Device(adapter,
-                    SharpDX.Direct3D11.DeviceCreationFlags.BgraSupport);
+                foreach (var a1 in dxgiFactory.Adapters1)
+                {
+                    foreach (var o in a1.Outputs)
+                    {
+                        var desc = o.Description.DesktopBounds;
+                        bool attached = o.Description.IsAttachedToDesktop;
+                        if (attached &&
+                            cursor.X >= desc.Left && cursor.X < desc.Right &&
+                            cursor.Y >= desc.Top && cursor.Y < desc.Bottom)
+                        {
+                            chosenAdapter = a1;
+                            chosenOutput = o;
+                            break;
+                        }
+                        o.Dispose();
+                    }
+                    if (chosenAdapter != null) break;
+                    a1.Dispose();
+                }
+
+                // Fallback if nothing matched
+                if (chosenAdapter == null)
+                {
+                    chosenAdapter = dxgiFactory.GetAdapter1(0);
+                    chosenOutput = chosenAdapter.GetOutput(0);
+                }
+
+                // Create the D3D11 device on the chosen adapter
+                adapter = chosenAdapter.QueryInterface<SharpDX.DXGI.Adapter>(); // keep a ref
+                d3dDevice = new SharpDX.Direct3D11.Device(adapter, SharpDX.Direct3D11.DeviceCreationFlags.BgraSupport);
                 Logger.Log("DirectX device created successfully");
                 Logger.Log($"Device feature level: {d3dDevice.FeatureLevel}");
 
-                // Get the primary monitor output and set up desktop duplication
-                output = adapter.GetOutput(0);
+                // Duplicate the chosen output
+                output = chosenOutput;
                 var output1 = output.QueryInterface<SharpDX.DXGI.Output1>();
                 outputDuplication = output1.DuplicateOutput(d3dDevice);
                 Logger.Log("Output duplication initialized.");

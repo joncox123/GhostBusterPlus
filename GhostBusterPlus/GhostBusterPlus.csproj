@@ -73,6 +73,7 @@
     <Reference Include="WindowsBase" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Logger.cs" />
     <Compile Include="Processor.cs" />
     <Compile Include="Program.cs">
       <SubType>Form</SubType>
