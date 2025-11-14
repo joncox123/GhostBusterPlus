@@ -117,10 +117,22 @@ namespace ScreenRefreshApp
                 outputDuplication = output1.DuplicateOutput(d3dDevice);
                 Logger.Log("Output duplication initialized.");
 
-                // Get the desktop dimensions to create appropriately sized textures
-                int width = output.Description.DesktopBounds.Right - output.Description.DesktopBounds.Left;
-                int height = output.Description.DesktopBounds.Bottom - output.Description.DesktopBounds.Top;
+                // Get the desktop dimensions from the duplication interface instead of output bounds
+                // This ensures we get the actual texture dimensions that will be captured
+                var duplicationDesc = outputDuplication.Description.ModeDescription;
+                int width = duplicationDesc.Width;
+                int height = duplicationDesc.Height;
                 Logger.Log($"Texture dimensions: Width={width}, Height={height}");
+                Logger.Log($"Output duplication format: {duplicationDesc.Format}");
+                Logger.Log($"Output duplication scaling: {duplicationDesc.Scaling}");
+
+                // Log additional DPI information for debugging
+                using (var graphics = System.Drawing.Graphics.FromHwnd(IntPtr.Zero))
+                {
+                    float dpiX = graphics.DpiX;
+                    float dpiY = graphics.DpiY;
+                    Logger.Log($"System DPI: X={dpiX}, Y={dpiY}");
+                }
 
                 // Create texture description for grayscale images
                 // Using R32_Float format for single-channel grayscale values (32-bit float per pixel)
