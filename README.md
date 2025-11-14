@@ -14,6 +14,7 @@ A utility to improve the eInk experience on the Lenovo ThinkBook Plus Gen 4 lapt
 - A menu option and hotkey for restarting the EInkApp, which tends to sometimes die or exhibit weird behavor when switching screens.
 - Ability to quickly switch between the provided eInk (light high contrast) and Dark Windows 11 themes.
 - Automatic detection of the active display (eInk or OLED) and automatic theme switching
+- Properly handles DPI scaling in Windows displays
 
 ## Installation
 First, you need to have the latest version of EInkPlus installed on your system. The latest version provides shortcut keys for various functions, such as clearing ghosts. Open the EInkApp Settings -> Display Settings -> Shortcut Key Settigns -> Edit (button). Change "Clear Eink Ghosts" to the "F4" key.
