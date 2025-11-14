@@ -378,7 +378,7 @@ namespace ScreenRefreshApp
             aboutMenu.Click += (s, e) =>
             {
                 System.Windows.Forms.MessageBox.Show(
-                    "GhostBusterPlus v1.0.1, by joncox123. Enhancing your Lenovo ThinkBook Plus Gen 4 experience. " +
+                    "GhostBusterPlus v1.0.3, by joncox123. Enhancing your Lenovo ThinkBook Plus Gen 4 experience. " +
                     "Copyright (c) 2025, all rights reserved. No warranty or suitability for any purpose is implied or provided.",
                     "About GhostBusterPlus",
                     System.Windows.Forms.MessageBoxButtons.OK,
