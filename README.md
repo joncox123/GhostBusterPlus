@@ -1,5 +1,5 @@
 ## GhostBusterPlus
-A utility to improve the eInk experience on the Lenovo ThinkBook Plus Gen 4 laptop.
+### A utility to improve the eInk experience on the Lenovo ThinkBook Plus Gen 4 laptop.
 
 Your support helps me to continue developing open source projects just like this one. Please considering donating if you find this software useful. Thanks!
 
