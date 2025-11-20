@@ -1,6 +1,8 @@
 ## GhostBusterPlus
 A utility to improve the eInk experience on the Lenovo ThinkBook Plus Gen 4 laptop.
 
+[![Buy Me A Coffee](https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20coffee&slug=joncox&button_colour=FFDD00&font_colour=000000&font_family=Inter&outline_colour=000000&coffee_colour=ffffff)](https://www.buymeacoffee.com/joncox)
+
 ### NEW: Version 1.0.3 has been released and should be working reliably now.
 
 ![logo](https://github.com/user-attachments/assets/def07e61-7fb3-45f7-be4b-e5d81a81018c)
